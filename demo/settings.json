@@ -1,0 +1,16 @@
+{
+  "language": "",
+  "advisorModel": "",
+  "statusLine": {
+    "type": "command",
+    "command": "printf ''"
+  },
+  "pluginConfigs": {
+    "cc-trans@inline": {
+      "options": {
+        "language": "ko",
+        "view": "stacked"
+      }
+    }
+  }
+}

@@ -7,17 +7,7 @@ English replies are shown with a translation. Code blocks, inline code, paths, U
 identifiers never go through the translator, and Markdown structure (headings, lists, quotes, tables)
 is kept line for line.
 
-~~~
-> `fetchUser()` 이 함수 왜 느린지 봐줘
-  ↳ Why is `fetchUser()` slow?
-
-● ## Fix the loop · 루프 고치기
-  The loop calls `fetchUser()` on every pass.
-  > 루프가 매번 `fetchUser()`를 호출해요.
-  ```ts
-  for (const id of ids) await fetchUser(id)
-  ```
-~~~
+![A Korean prompt goes to Claude in English; the English reply gets a dimmed Korean translation under each paragraph, code untouched](demo/cc-trans.gif)
 
 ## Install
 
@@ -74,6 +64,7 @@ Set at install time, or under `pluginConfigs["cc-trans"].options` in settings.
 claude --plugin-dir .          # load it
 claude plugin validate .
 claude plugin test .
+vhs demo/demo.tape && END=21 demo/render.sh   # re-record the demo (needs vhs, ffmpeg, gifsicle)
 ```
 
 See [DESIGN.md](DESIGN.md) for the unit model and the display rules.
