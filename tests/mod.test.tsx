@@ -333,6 +333,33 @@ test('the stacked view keeps the original and mutes the translation under it, co
   }
 })
 
+test('the side view draws each English block beside its translation from its own Markdown', { options: { view: 'side' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  fakeModel(on, ko)
+  engineStandIn(on)
+  await start($, on)
+  await $.session.append({
+    door: 'response',
+    origin: { kind: 'model', model: 'claude' },
+    uuid: 'r4',
+    message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: REPLY }] },
+  } as never)
+  await clock.advance(300)
+  await clock.settle()
+  const ui = await $.ui.mount({
+    plugin: 'cc-trans',
+    surface: 'terminal',
+    component: 'AssistantMessage',
+    requestId: 'r4',
+    props: { text: REPLY, isFirstOfReply: true },
+  } as never)
+  // the engine's own node may not sit in a sized Box, so the view draws the English itself
+  expect((await ui.find({ type: 'Markdown', text: /^The loop calls/ }))?.text).toBe('The loop calls `fetchUser()` on every pass.')
+  expect((await ui.find({ type: 'Text', text: /루프가 매번/ }))?.props.color).toBe('subtle')
+  expect((await ui.find({ type: 'Markdown', text: /for \(const id/ }))?.text).toContain('for (const id of ids)')
+  await ui.unmount()
+})
+
 test('plainText takes out inline marks and keeps list markers; plainLines splits the marker off', () => {
   expect(plainText('- **Promise.all**: `tasks`가 끝나면 [문서](https://x.y)를 보세요')).toBe('- Promise.all: tasks가 끝나면 문서를 보세요')
   expect(plainText('## 제목 `a`\n> 인용 *강조* snake_case_name a*b')).toBe('제목 a\n인용 강조 snake_case_name a*b')

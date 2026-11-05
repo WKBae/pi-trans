@@ -273,7 +273,10 @@ async function translatePrompt($: EngineInterface, text: string): Promise<{ engl
   if (hit) return hit
   const plan = planMarkdown(text)
   if (plan.units.length === 0) return { error: 'nothing to translate' }
-  const r = await translatePlanUnits($, plan.units, cfg.language, 'en')
+  let r = await translatePlanUnits($, plan.units, cfg.language, 'en')
+  // A prompt is worth a second try: the lines that came back go from the cache,
+  // only the ones that failed are sent again.
+  if (r.out.some(o => o == null)) r = await translatePlanUnits($, plan.units, cfg.language, 'en')
   if (r.out.every(o => o == null)) return { error: r.error ?? 'no translation' }
   const done = { english: buildDocument(plan, r.out), engine: r.engine }
   promptCache.set(text, done)
@@ -625,6 +628,33 @@ export const register: Register = (on, options) => {
         row
       )
 
+    // A translated block as the views draw it: plain text in the theme's subtle
+    // color, a list item's marker apart so a wrapped item keeps its indent.
+    const muted = (translation: string) =>
+      plainLines(translation).map((l, j) =>
+        l.marker ? (
+          <Box key={`l${j}`} flexDirection="row">
+            <Text color="subtle">{l.indent + l.marker}</Text>
+            <Box flexShrink={1}>
+              <Text color="subtle">{l.text}</Text>
+            </Box>
+          </Box>
+        ) : (
+          <Text key={`l${j}`} color="subtle">
+            {l.indent + l.text || ' '}
+          </Text>
+        ),
+      )
+    const bulleted = (body: ReturnType<typeof Box>) =>
+      e.props.isFirstOfReply ? (
+        <Box flexDirection="row">
+          <Text>● </Text>
+          {body}
+        </Box>
+      ) : (
+        <Box paddingLeft={2}>{body}</Box>
+      )
+
     if (view === 'stacked') {
       // Each block as Claude wrote it, its translation right under it as plain
       // text in the theme's subtle color, indented and narrower;
@@ -639,36 +669,14 @@ export const register: Register = (on, options) => {
               <Box key={`b${i}`} flexDirection="column">
                 <Markdown text={r.original} />
                 <Box paddingLeft={2} paddingRight={4} flexDirection="column">
-                  {plainLines(r.translation).map((l, j) =>
-                    l.marker ? (
-                      <Box key={`l${j}`} flexDirection="row">
-                        <Text color="subtle">{l.indent + l.marker}</Text>
-                        <Box flexShrink={1}>
-                          <Text color="subtle">{l.text}</Text>
-                        </Box>
-                      </Box>
-                    ) : (
-                      <Text key={`l${j}`} color="subtle">
-                        {l.indent + l.text || ' '}
-                      </Text>
-                    ),
-                  )}
+                  {muted(r.translation)}
                 </Box>
               </Box>
             ),
           )}
         </Box>
       )
-      return withFooter(
-        e.props.isFirstOfReply ? (
-          <Box flexDirection="row">
-            <Text>● </Text>
-            {body}
-          </Box>
-        ) : (
-          <Box paddingLeft={2}>{body}</Box>
-        ),
-      )
+      return withFooter(bulleted(body))
     }
     if (view === 'translated') {
       return withFooter(await next({ ...e, props: { ...e.props, text: buildDocument(plan, entry.out) } }))
@@ -680,17 +688,28 @@ export const register: Register = (on, options) => {
       const below = `${text}\n\n${quote(foldedTranslation(plan, entry.out, lang))}`
       return withFooter(await next({ ...e, props: { ...e.props, text: below } }))
     }
-    // side by side: the engine's own drawing on the left, the translation right
-    const row = await next(e)
+    // side by side, block by block: the English left, its translation right;
+    // code and other untranslated blocks once, across the whole width. Drawn
+    // from Markdown of its own: the engine's node may not sit in a sized Box.
     return withFooter(
-      <Box flexDirection="row" columnGap={2}>
-        <Box width="50%" flexDirection="column">
-          {row}
-        </Box>
-        <Box width="50%" flexDirection="column">
-          <Markdown text={buildDocument(plan, entry.out)} />
-        </Box>
-      </Box>,
+      bulleted(
+        <Box flexDirection="column" rowGap={1} flexGrow={1}>
+          {stackedBlocks(plan, entry.out).map((r, i) =>
+            r.translation === null ? (
+              <Markdown key={`b${i}`} text={r.original} />
+            ) : (
+              <Box key={`b${i}`} flexDirection="row" columnGap={3}>
+                <Box width="50%" flexDirection="column">
+                  <Markdown text={r.original} />
+                </Box>
+                <Box width="50%" flexDirection="column">
+                  {muted(r.translation)}
+                </Box>
+              </Box>
+            ),
+          )}
+        </Box>,
+      ),
     )
   })
 
