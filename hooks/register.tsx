@@ -14,7 +14,7 @@ const viewAtom = atom({ plugin: 'cc-trans', key: 'view' } as const, null)
 const previewAtom = atom({ plugin: 'cc-trans', key: 'preview' } as const, null)
 const queuedAtom = atom({ plugin: 'cc-trans', key: 'queued' } as const, 0)
 
-const VIEWS: View[] = ['auto', 'interleave', 'side', 'below', 'translated', 'original']
+const VIEWS: View[] = ['auto', 'stacked', 'interleave', 'side', 'below', 'translated', 'original']
 const PERSON_ORIGINS = new Set(['composer', 'bridge', 'sdk'])
 const MAX_IN_FLIGHT = 3
 const PREVIEW_DELAY_MS = 700
@@ -61,6 +61,20 @@ export function interleave(plan: Plan, out: readonly (string | null)[]): string 
       return `${block.original}\n${quote(tr)}`
     })
     .join('\n')
+}
+
+/** Blocks for the stacked view: the translation, and the English it came from. */
+export function stackedBlocks(plan: Plan, out: readonly (string | null)[]): { main: string; english: string | null }[] {
+  return plan.blocks
+    .filter(block => block.kind !== 'blank')
+    .map(block => {
+      if (!TRANSLATABLE.has(block.kind) || !block.parts.some(p => typeof p !== 'string')) {
+        return { main: block.original, english: null }
+      }
+      const tr = buildBlock(plan, block, out)
+      if (tr == null || tr === block.original) return { main: block.original, english: null }
+      return { main: tr, english: block.original }
+    })
 }
 
 /** The translation with code blocks folded to one line, for the `below` view. */
@@ -291,6 +305,22 @@ function tick($: EngineInterface) {
 // Renders cannot write state, so they leave work here for the worker.
 const wanted = new Map<string, string>()
 
+// Blocks drawn during a live turn, by row: a block whose text has stopped
+// changing for STABLE_MS is done streaming and is translated right away,
+// without waiting for the turn to end.
+const STABLE_MS = 800
+const watched = new Map<string, { text: string; changedAt: number }>()
+
+async function drainStable($: EngineInterface) {
+  if (watched.size === 0) return
+  const now = await $.clock.now()
+  for (const [row, w] of watched) {
+    if (now - w.changedAt < STABLE_MS) continue
+    watched.delete(row)
+    void enqueue($, w.text)
+  }
+}
+
 function drainWanted($: EngineInterface) {
   for (const [key, text] of wanted) {
     wanted.delete(key)
@@ -354,6 +384,7 @@ export const register: Register = (on, options) => {
     })
     $.clock.every(250, () => {
       drainWanted($)
+      void drainStable($)
       tick($)
       void maybePreview($)
     })
@@ -494,11 +525,15 @@ export const register: Register = (on, options) => {
 
     const entry = await read($, { plugin: 'cc-trans', key: 'reply', id: key } as const)
     if (!entry) {
-      // Not appended in this session (a resumed transcript), or still
-      // streaming: ask for it once the turn is over and it is in view.
-      // Only where the surface says it is on screen, so resuming a long
-      // transcript does not send every old reply at once.
-      if (!busy && e.props.onScreen) wanted.set(key, text)
+      if (busy) {
+        // Live: translate once the block stops changing (streaming ended).
+        const w = watched.get(e.requestId)
+        if (!w || w.text !== text) watched.set(e.requestId, { text, changedAt: await $.clock.now() })
+      } else if (e.props.onScreen) {
+        // A resumed transcript: only where the surface says it is on
+        // screen, so resuming does not send every old reply at once.
+        wanted.set(key, text)
+      }
       return next(e)
     }
     if (entry.status === 'skipped') return next(e)
@@ -534,8 +569,8 @@ export const register: Register = (on, options) => {
 
     let view = (await read($, viewAtom)) ?? cfg.view
     const columns = e.viewport?.columns ?? 0
-    if (view === 'auto') view = columns >= SIDE_MIN_COLUMNS ? 'side' : 'interleave'
-    if (view === 'side' && columns > 0 && columns < 100) view = 'interleave'
+    if (view === 'auto') view = columns >= SIDE_MIN_COLUMNS ? 'side' : 'stacked'
+    if (view === 'side' && columns > 0 && columns < 100) view = 'stacked'
     if (view === 'original') return next(e)
 
     const plan = planMarkdown(text)
@@ -551,6 +586,35 @@ export const register: Register = (on, options) => {
         row
       )
 
+    if (view === 'stacked') {
+      // Each block in the person's language, its English dimmed under it;
+      // code and other untranslated blocks once, as they are.
+      const rows = stackedBlocks(plan, entry.out)
+      const body = (
+        <Box flexDirection="column" rowGap={1}>
+          {rows.map((r, i) =>
+            r.english === null ? (
+              <Markdown key={`b${i}`} text={r.main} />
+            ) : (
+              <Box key={`b${i}`} flexDirection="column">
+                <Markdown text={r.main} />
+                <Markdown text={r.english} dimColor />
+              </Box>
+            ),
+          )}
+        </Box>
+      )
+      return withFooter(
+        e.props.isFirstOfReply ? (
+          <Box flexDirection="row">
+            <Text>● </Text>
+            {body}
+          </Box>
+        ) : (
+          <Box paddingLeft={2}>{body}</Box>
+        ),
+      )
+    }
     if (view === 'translated') {
       return withFooter(await next({ ...e, props: { ...e.props, text: buildDocument(plan, entry.out) } }))
     }

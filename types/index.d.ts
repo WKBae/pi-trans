@@ -1,4 +1,4 @@
-export type View = 'auto' | 'interleave' | 'side' | 'below' | 'translated' | 'original'
+export type View = 'auto' | 'stacked' | 'interleave' | 'side' | 'below' | 'translated' | 'original'
 
 /** One reply block's translation, keyed by a hash of the block's text. */
 export type ReplyEntry = {

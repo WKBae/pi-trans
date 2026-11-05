@@ -3,7 +3,7 @@ import type { On } from 'claude-code'
 
 import { translateUnits, type EngineConfig, type Io } from '../hooks/engines'
 import { maskText, planMarkdown } from '../hooks/markdown'
-import { interleave } from '../hooks/register'
+import { interleave, stackedBlocks } from '../hooks/register'
 
 const USAGE = { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
 
@@ -94,7 +94,7 @@ test('the sent prompt row shows what was typed, and the English under it', async
 
 const REPLY = ['## Fix the loop', '', 'The loop calls `fetchUser()` on every pass.', '', '```ts', 'for (const id of ids) await fetchUser(id)', '```', '', 'Move it out:'].join('\n')
 
-test('a reply is translated in the background and drawn interleaved, code once', async ($, on) => {
+test('a reply is translated in the background and drawn interleaved, code once', { options: { view: 'interleave' } }, async ($, on) => {
   const clock = mock.clock(on)
   const calls = fakeModel(on, ko)
   engineStandIn(on)
@@ -263,7 +263,7 @@ test('a translated prompt carries the reply-in-English rule as hidden context', 
   expect(context?.[0]).toContain('Always respond in English')
 })
 
-test('at the end of a turn the reply blocks are read back and translated', async ($, on) => {
+test('at the end of a turn the reply blocks are read back and translated', { options: { view: 'interleave' } }, async ($, on) => {
   const clock = mock.clock(on)
   const calls = fakeModel(on, ko)
   engineStandIn(on)
@@ -291,5 +291,65 @@ test('at the end of a turn the reply blocks are read back and translated', async
     props: { text: 'Move it out:', isFirstOfReply: true },
   } as never)
   expect((await ui.find({ type: 'Text', text: /Move/ }))?.text).toBe('Move it out:\n> 밖으로 옮기세요:')
+  await ui.unmount()
+})
+
+test('the stacked view puts the translation first and the English dimmed under it, code once', async ($, on) => {
+  const clock = mock.clock(on)
+  fakeModel(on, ko)
+  engineStandIn(on)
+  await start($, on)
+  await $.session.append({
+    door: 'response',
+    origin: { kind: 'model', model: 'claude' },
+    uuid: 'r3',
+    message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: REPLY }] },
+  } as never)
+  await clock.advance(300)
+  await clock.settle()
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({
+      plugin: 'cc-trans',
+      surface,
+      component: 'AssistantMessage',
+      requestId: 'r3',
+      props: { text: REPLY, isFirstOfReply: true },
+    } as never)
+    const ko1 = await ui.find({ type: 'Markdown', text: /루프가 매번/ })
+    expect(ko1?.text).toBe('루프가 매번 `fetchUser()`를 호출해요.')
+    const en1 = await ui.find({ type: 'Markdown', text: /^The loop calls/ })
+    expect(en1?.text).toBe('The loop calls `fetchUser()` on every pass.')
+    expect((await ui.find({ type: 'Markdown', text: /for \(const id/ }))?.text).toBe('```ts\nfor (const id of ids) await fetchUser(id)\n```')
+    await ui.unmount()
+  }
+})
+
+test('stackedBlocks pairs each translated block with its English and leaves code alone', () => {
+  const plan = planMarkdown(REPLY)
+  const rows = stackedBlocks(plan, plan.units.map(u => `[ko] ${u.text}`))
+  expect(rows.map(r => r.english === null)).toEqual([false, false, true, false])
+  expect(rows[2]?.main).toContain('for (const id of ids)')
+})
+
+test('during a turn a block is translated once it stops changing, before the turn ends', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = fakeModel(on, ko)
+  engineStandIn(on)
+  on('turn.start', (_$, e) => e as never)
+  await start($, on)
+  await $.turn.start({ turnId: 't', prompt: 'x' } as never)
+  const draw = (text: string) =>
+    $.ui.mount({ plugin: 'cc-trans', surface: 'terminal', component: 'AssistantMessage', requestId: 'live', props: { text, isFirstOfReply: true } } as never)
+  // streaming: the text grows
+  for (const text of ['The loop', 'The loop calls `fetchUser()`', 'The loop calls `fetchUser()` on every pass.']) {
+    await (await draw(text)).unmount()
+    await clock.advance(100)
+  }
+  expect(calls).toHaveLength(0)
+  await clock.advance(1000)
+  await clock.settle()
+  expect(calls).toEqual([['The loop calls ⟦0⟧ on every pass.']])
+  const ui = await draw('The loop calls `fetchUser()` on every pass.')
+  expect(await ui.find({ type: 'Markdown', text: /루프가 매번/ })).toBeDefined()
   await ui.unmount()
 })
