@@ -224,7 +224,7 @@ test('a resting draft is previewed above the prompt, and Enter reuses it', async
   })
   engineStandIn(on)
   await start($, on)
-  await $.prompt.edit({ origin: { kind: 'key' }, text: '', cursor: 0, start: 0, end: 0, inputText: draft } as never)
+  await ($.prompt as unknown as { edit: (e: unknown) => Promise<unknown> }).edit({ origin: { kind: 'key' }, text: '', cursor: 0, start: 0, end: 0, inputText: draft } as never)
 
   const BAND = {
     plugin: 'cc-trans',
