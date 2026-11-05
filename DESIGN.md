@@ -157,7 +157,7 @@ re-drains it instead of leaving blocks at "번역 중…".
 
 | Field | Default | Notes |
 | --- | --- | --- |
-| `language` | `ko` | the person's language (BCP 47 primary tag) |
+| `language` | empty | the person's language; empty follows Claude Code's `language` setting, then `LC_ALL`/`LC_MESSAGES`/`LANG`; nothing set means English, nothing translated |
 | `engine` | `haiku` | `haiku` · `openai` · `command` |
 | `view` | `auto` | `auto` · `interleave` · `side` · `translated` · `original` |
 | `preview` | `true` | live preview band |

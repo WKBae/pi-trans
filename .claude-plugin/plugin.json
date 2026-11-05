@@ -8,8 +8,8 @@
     "language": {
       "type": "string",
       "title": "Your language",
-      "description": "The language you type and read in, as a BCP 47 code (ko, ja, zh, es, de, ...).",
-      "default": "ko"
+      "description": "The language you type and read in: a code (ko, ja, zh, es, de, ...) or its name. Empty: follow Claude Code's language setting, then the system locale.",
+      "default": ""
     },
     "engine": {
       "type": "string",

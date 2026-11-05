@@ -3,7 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Preview, PromptEntry, ReplyEntry, View } from '../types'
 import { scriptOf, scriptShare } from './detect'
-import { translateUnits, type EngineConfig, type EngineKind, type Io } from './engines'
+import { languageName, translateUnits, type EngineConfig, type EngineKind, type Io } from './engines'
+import { pickLanguage } from './language'
 import { buildBlock, buildDocument, planMarkdown, unmask, unmaskAt, type Plan, type Unit } from './markdown'
 import { t } from './strings'
 
@@ -92,21 +93,24 @@ export function foldedTranslation(plan: Plan, out: readonly (string | null)[], l
 
 /** The instruction that keeps replies in English, so they reach the translator. */
 export function replyRule(lang: string): string {
+  const name = languageName(lang)
   return [
     '# Language',
-    `The user reads and writes ${lang}. A translator turns their messages into English before you read them and turns your replies into ${lang} after you write them.`,
+    `The user reads and writes ${name}. A translator turns their messages into English before you read them and turns your replies into ${name} after you write them.`,
     'Always respond in English, whatever other instructions say about language. Write plain, direct sentences that translate well. Keep code, paths, commands and identifiers exactly as they are.',
   ].join('\n')
 }
 
-type Config = EngineConfig & { language: string; view: View; preview: boolean; replyInEnglish: boolean }
+type Config = EngineConfig & { languageOption: string; language: string; view: View; preview: boolean; replyInEnglish: boolean }
 
 function readConfig(options: Readonly<Record<string, unknown>>): Config {
   const str = (v: unknown, d: string) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : d)
   const kind = str(options.engine, 'haiku')
   const view = str(options.view, 'auto')
   return {
-    language: str(options.language, 'ko'),
+    languageOption: str(options.language, ''),
+    // resolved at session.start: option, Claude Code's language setting, locale
+    language: 'en',
     kind: (['haiku', 'openai', 'command'].includes(kind) ? kind : 'haiku') as EngineKind,
     view: (VIEWS.includes(view as View) ? view : 'auto') as View,
     preview: options.preview !== false,
@@ -151,6 +155,36 @@ function ioFor($: EngineInterface): Io {
 let cfg: Config = readConfig({})
 let script = scriptOf(cfg.language)
 let engineLabel: string = cfg.kind
+let languageFrom: 'option' | 'setting' | 'locale' | 'none' = 'none'
+
+/** English readers have nothing to translate. */
+const idle = () => cfg.language.toLowerCase().startsWith('en')
+
+/** Settles the person's language from what is set; never assumes one. */
+async function resolveLanguage($: EngineInterface) {
+  let setting: unknown
+  try {
+    setting = ((await $.settings.read()) as Record<string, unknown>).language
+  } catch {
+    setting = undefined
+  }
+  const env = async (read: () => Promise<string | undefined>) => {
+    try {
+      return await read()
+    } catch {
+      return undefined
+    }
+  }
+  const locales = [
+    await env(() => $.env.get('LC_ALL')),
+    await env(() => $.env.get('LC_MESSAGES')),
+    await env(() => $.env.get('LANG')),
+  ]
+  const picked = pickLanguage(cfg.languageOption, setting, locales)
+  cfg.language = picked.code
+  languageFrom = picked.from
+  script = scriptOf(cfg.language)
+}
 
 // Work that is rebuilt on reload: the reply queue, what is on screen, caches.
 type Job = { key: string; text: string }
@@ -227,7 +261,7 @@ async function needsTranslation($: EngineInterface, text: string): Promise<boole
   const trimmed = text.trim()
   if (trimmed.length < 2 || trimmed.startsWith('/')) return false
   if (script !== 'Latin') return scriptShare(trimmed, script) >= 0.2
-  if (cfg.language.toLowerCase().startsWith('en')) return false
+  if (idle()) return false
   const cached = classified.get(trimmed)
   if (cached !== undefined) return cached
   const label = await $.model.classify(trimmed, ['english', 'other'])
@@ -246,6 +280,7 @@ async function publishQueued($: EngineInterface) {
 }
 
 async function enqueue($: EngineInterface, text: string) {
+  if (idle()) return
   const key = keyOf(text)
   if (jobs.has(key) || inflight.has(key)) return
   const existing = await read($, { plugin: 'cc-trans', key: 'reply', id: key } as const)
@@ -377,6 +412,7 @@ export const register: Register = (on, options) => {
   // --- hooks ---------------------------------------------------------------
 
   on('session.start', async ($, e, next) => {
+    await resolveLanguage($)
     await $.command.register({
       name: 'translate',
       description: 'Translation: on, off, status, or view <auto|interleave|side|below|translated|original>.',
@@ -409,7 +445,7 @@ export const register: Register = (on, options) => {
   // Ask for English replies, so every reply goes through the translator.
   on('prompt.compose', async ($, e, next) => {
     const r = await next(e)
-    if (!cfg.replyInEnglish || cfg.language.toLowerCase().startsWith('en')) return r
+    if (!cfg.replyInEnglish || idle()) return r
     const lang = cfg.language
     const sections = r.sections.filter(s => s.id !== 'language' && !/^#\s*Language\b/.test(s.text))
     return {
@@ -448,7 +484,7 @@ export const register: Register = (on, options) => {
     await update($, { plugin: 'cc-trans', key: 'prompt', id: keyOf(r.english) } as const, () => entry)
     // prompt.compose can be passed over (a policy plugin seated first), so the
     // reply-language rule also rides each translated prompt as hidden context.
-    const wantsEnglish = cfg.replyInEnglish && !cfg.language.toLowerCase().startsWith('en')
+    const wantsEnglish = cfg.replyInEnglish && !idle()
     const context = wantsEnglish ? [...(e.context ?? []), replyRule(cfg.language)] : e.context
     return next({ ...e, text: r.english, ...(context ? { context } : {}) })
   }).catch(($, e, next) => next(e))
@@ -495,7 +531,7 @@ export const register: Register = (on, options) => {
       const settings = (await $.settings.read()) as Record<string, unknown>
       const lines = [
         `${t(lang, 'status')}: ${enabled ? 'on' : 'off'}`,
-        `${t(lang, 'language')}: ${cfg.language} ⇄ en`,
+        `${t(lang, 'language')}: ${cfg.language} ⇄ en (${t(lang, `from_${languageFrom}`)})`,
         `${t(lang, 'engine')}: ${engineLabel}${cfg.kind !== 'haiku' && cfg.fallback ? ` (→ haiku)` : ''}`,
         `${t(lang, 'view')}: ${view}`,
         `${t(lang, 'preview')}: ${cfg.preview ? 'on' : 'off'}`,
@@ -514,7 +550,7 @@ export const register: Register = (on, options) => {
   // --- drawing -------------------------------------------------------------
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    if (e.props.isSummary) return next(e)
+    if (e.props.isSummary || idle()) return next(e)
     if (!(await read($, enabledAtom))) return next(e)
     const text = e.props.text
     if (!text.trim()) return next(e)
@@ -679,7 +715,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
-    if (!(await read($, enabledAtom))) return next(e)
+    if (idle() || !(await read($, enabledAtom))) return next(e)
     const queued = await read($, queuedAtom)
     const mine = `${cfg.language}⇄en · ${engineLabel}${queued > 0 ? ` · ${t(cfg.language, 'queuedShort', String(queued))}` : ''}`
     return next({ ...e, props: { ...e.props, tail: e.props.tail ? `${e.props.tail} · ${mine}` : mine } })

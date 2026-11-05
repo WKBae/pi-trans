@@ -59,7 +59,7 @@ Set at install time, or under `pluginConfigs["cc-trans"].options` in settings.
 
 | Option | Default | |
 | --- | --- | --- |
-| `language` | `ko` | your language, a BCP 47 code |
+| `language` | empty | your language, a code (`ko`, `ja`, …) or its name; empty follows Claude Code's `language` setting, then the system locale (`LANG`); nothing set means no translation |
 | `engine` | `haiku` | `haiku` · `openai` · `command` |
 | `view` | `auto` | see Views |
 | `preview` | `true` | live English preview while typing |

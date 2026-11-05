@@ -21,6 +21,10 @@ type Key =
   | 'missingCommand'
   | 'languageSetting'
   | 'usage'
+  | 'from_option'
+  | 'from_setting'
+  | 'from_locale'
+  | 'from_none'
 
 const EN: Record<Key, string> = {
   code: 'code',
@@ -43,6 +47,10 @@ const EN: Record<Key, string> = {
   missingCommand: '⚠ The command engine needs a command.',
   languageSetting: '⚠ Your language setting ({0}) makes Claude answer in your language, so replies need no translation. Turn on replyInEnglish to change that.',
   usage: 'Usage: /translate [on|off|status|view <mode>]',
+  from_option: 'from the language option',
+  from_setting: "from Claude Code's language setting",
+  from_locale: 'from the system locale',
+  from_none: 'nothing set: no translation',
 }
 
 const KO: Record<Key, string> = {
@@ -64,8 +72,12 @@ const KO: Record<Key, string> = {
   queuedShort: '{0}개 대기',
   missingOpenai: '⚠ openai 엔진에는 openaiBaseUrl과 openaiModel이 필요해요.',
   missingCommand: '⚠ command 엔진에는 command 설정이 필요해요.',
-  languageSetting: '⚠ language 설정({0}) 때문에 Claude가 이미 한국어로 답하고 있어서 번역할 답변이 없어요. replyInEnglish를 켜면 영어로 답하게 해요.',
+  languageSetting: '⚠ language 설정({0}) 때문에 Claude가 이미 그 언어로 답하고 있어서 번역할 답변이 없어요. replyInEnglish를 켜면 영어로 답하게 해요.',
   usage: '사용법: /translate [on|off|status|view <mode>]',
+  from_option: 'language 옵션',
+  from_setting: 'Claude Code language 설정',
+  from_locale: '시스템 로케일',
+  from_none: '설정 없음: 번역 안 함',
 }
 
 const JA: Partial<Record<Key, string>> = {

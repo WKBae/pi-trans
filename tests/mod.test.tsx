@@ -4,6 +4,7 @@ import type { On } from 'claude-code'
 import { translateUnits, type EngineConfig, type Io } from '../hooks/engines'
 import { maskText, planMarkdown } from '../hooks/markdown'
 import { interleave, stackedBlocks } from '../hooks/register'
+import { pickLanguage, toLanguageCode } from '../hooks/language'
 
 const USAGE = { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
 
@@ -26,7 +27,10 @@ function engineStandIn(on: On) {
   })
 }
 
-async function start($: Engine, on: On) {
+/** Starts a session whose language comes from where the person set it: here, the locale. */
+async function start($: Engine, on: On, where: { settings?: Record<string, unknown>; env?: Record<string, string> } = {}) {
+  mock.env(on, where.env ?? { LANG: 'ko_KR.UTF-8' })
+  on('settings.read', () => ({ value: where.settings ?? {} }))
   on('session.start', (_$, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: { command: 'translate' } }))
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
@@ -355,4 +359,61 @@ test('during a turn a block is translated once it stops changing, before the tur
   const ui = await draw('The loop calls `fetchUser()` on every pass.')
   expect(await ui.find({ type: 'Markdown', text: /루프가 매번/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('language codes come from codes, locales and names', () => {
+  expect(toLanguageCode('ko')).toBe('ko')
+  expect(toLanguageCode('ko_KR.UTF-8')).toBe('ko')
+  expect(toLanguageCode('pt-BR')).toBe('pt')
+  expect(toLanguageCode('Korean')).toBe('ko')
+  expect(toLanguageCode('한국어')).toBe('ko')
+  expect(toLanguageCode('日本語')).toBe('ja')
+  expect(toLanguageCode('Japanese')).toBe('ja')
+  expect(toLanguageCode('spanish')).toBe('es')
+  expect(toLanguageCode('C')).toBeUndefined()
+  expect(toLanguageCode('')).toBeUndefined()
+  expect(toLanguageCode('Klingon')).toBeUndefined()
+})
+
+test('the option wins, then the language setting, then the locale, else English', () => {
+  expect(pickLanguage('ja', 'Korean', ['de_DE.UTF-8'])).toEqual({ code: 'ja', from: 'option' })
+  expect(pickLanguage('', 'Korean', ['de_DE.UTF-8'])).toEqual({ code: 'ko', from: 'setting' })
+  expect(pickLanguage('', undefined, [undefined, 'de_DE.UTF-8'])).toEqual({ code: 'de', from: 'locale' })
+  expect(pickLanguage('', undefined, ['C', undefined])).toEqual({ code: 'en', from: 'none' })
+})
+
+test('with Japanese set in Claude Code settings, Japanese prompts are translated and Korean ones are not', async ($, on) => {
+  mock.clock(on)
+  const calls = fakeModel(on, s => `[en] ${s}`)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  await start($, on, { settings: { language: 'Japanese' }, env: { LANG: 'ko_KR.UTF-8' } })
+  await $.prompt.submit({ text: 'この関数はなぜ遅いですか', wait: false, origin: { kind: 'composer' } })
+  await $.prompt.submit({ text: '이 함수 왜 느려', wait: false, origin: { kind: 'composer' } })
+  expect(sent).toEqual(['[en] この関数はなぜ遅いですか', '이 함수 왜 느려'])
+  expect(calls).toHaveLength(1)
+})
+
+test('with no language set anywhere nothing is translated', async ($, on) => {
+  mock.clock(on)
+  const calls = fakeModel(on, s => `[x] ${s}`)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  engineStandIn(on)
+  await start($, on, { env: {} })
+  await $.prompt.submit({ text: '이 함수 왜 느려', wait: false, origin: { kind: 'composer' } })
+  await $.session.append({
+    door: 'response',
+    origin: { kind: 'model', model: 'claude' },
+    uuid: 'r9',
+    message: { type: 'assistant', role: 'assistant', content: [{ type: 'text', text: 'Some reply.' }] },
+  } as never)
+  expect(sent).toEqual(['이 함수 왜 느려'])
+  expect(calls).toHaveLength(0)
 })
