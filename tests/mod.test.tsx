@@ -88,7 +88,7 @@ test('the sent prompt row shows what was typed, and the English under it', async
       surface,
       component: 'UserMessage',
       requestId: 'p1',
-      props: { text: 'Why is `fetchUser()` slow?', origin: { kind: 'composer' }, isExpanded: false },
+      props: { text: 'Why is `fetchUser()` slow?', origin: { kind: 'composer' }, isExpanded: true },
     } as never)
     expect((await ui.find({ type: 'Text', text: /이 함수/ }))?.text).toBe('`fetchUser()` 이 함수 왜 느린지 봐줘')
     expect((await ui.find({ type: 'Text', text: /↳/ }))?.text).toBe('↳ Why is `fetchUser()` slow?')

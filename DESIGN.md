@@ -143,11 +143,12 @@ re-drains it instead of leaving blocks at "번역 중…".
 - **Submit**: `prompt.submit` → `next({ ...e, text: english })`, with a 15 s deadline. On failure the original is
   sent and a toast says why. Slash commands, `isMeta` prompts and non-person origins pass through.
 - **Transcript row** (`UserMessage`, origin prompt): the person's own text as typed, and under it the English
-  Claude read, dim, prefixed `↳`. `isExpanded` (ctrl+o) draws the engine's row.
+  Claude read, dim, prefixed `↳`, in the normal view and in ctrl+o alike (the engine marks a prompt row
+  `isExpanded` in both).
 
 ### Status and settings
 
-- `PromptHint.tail`: `ko⇄en · haiku` (and `· 3 queued` while the worker has work).
+- `PromptHint.tail`: `ko↔en · haiku` (and `· 3 queued` while the worker has work).
 - `/translate` with no argument opens a small settings pane (engine, language, view, preview, on/off);
   `/translate on|off|status|view <mode>`.
 - `/translate status` also warns when the Claude Code `language` setting makes Claude answer in the person's

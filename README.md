@@ -40,7 +40,7 @@ is kept line for line.
   - `below`: the English reply, then the whole translation (code folded).
   - `translated`: the translation only, code in place.
   - `original`: English only.
-- **Status**: the hint line under the prompt shows `ko⇄en · haiku` and how many blocks are queued.
+- **Status**: the hint line under the prompt shows `ko↔en · haiku` and how many blocks are queued.
 - `/translate` toggles; `/translate on|off|status|view <mode>`.
 
 ## Engines

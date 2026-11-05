@@ -499,7 +499,7 @@ export const register: Register = (on, options) => {
       const settings = (await $.settings.read()) as Record<string, unknown>
       const lines = [
         `${t(lang, 'status')}: ${enabled ? 'on' : 'off'}`,
-        `${t(lang, 'language')}: ${cfg.language} ⇄ en (${t(lang, `from_${languageFrom}`)})`,
+        `${t(lang, 'language')}: ${cfg.language} ↔ en (${t(lang, `from_${languageFrom}`)})`,
         `${t(lang, 'engine')}: ${engineLabel}${cfg.kind !== 'haiku' && cfg.fallback ? ` (→ haiku)` : ''}`,
         `${t(lang, 'view')}: ${view}`,
         `${t(lang, 'preview')}: ${cfg.preview ? 'on' : 'off'}`,
@@ -644,7 +644,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
-    if (e.props.isExpanded || !PERSON_ORIGINS.has(e.props.origin.kind)) return next(e)
+    if (!PERSON_ORIGINS.has(e.props.origin.kind)) return next(e)
     const entry = await read($, { plugin: 'cc-trans', key: 'prompt', id: keyOf(e.props.text) } as const)
     if (!entry) return next(e)
     const { Box, Text } = $.ui.resolve(e)
@@ -685,7 +685,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     if (idle() || !(await read($, enabledAtom))) return next(e)
     const queued = await read($, queuedAtom)
-    const mine = `${cfg.language}⇄en · ${engineLabel}${queued > 0 ? ` · ${t(cfg.language, 'queuedShort', String(queued))}` : ''}`
+    const mine = `${cfg.language}↔en · ${engineLabel}${queued > 0 ? ` · ${t(cfg.language, 'queuedShort', String(queued))}` : ''}`
     return next({ ...e, props: { ...e.props, tail: e.props.tail ? `${e.props.tail} · ${mine}` : mine } })
   })
 }
