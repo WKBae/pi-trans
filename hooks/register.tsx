@@ -64,6 +64,41 @@ export function interleave(plan: Plan, out: readonly (string | null)[]): string 
     .join('\n')
 }
 
+/**
+ * A translated block as plain text: Markdown's inline marks taken out (code
+ * ticks, emphasis, link targets, heading and quote markers), list markers and
+ * line breaks kept. The stacked view draws it in one muted color, so nothing
+ * in it (inline code colors, bold) pulls the eye from the original above.
+ */
+export function plainText(md: string): string {
+  return md
+    .split('\n')
+    .map(line =>
+      line
+        .replace(/^(\s*)(?:>\s?)+/, '$1')
+        .replace(/^(\s*)#{1,6}\s+/, '$1')
+        .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/\[([^\]]+)\](?:\([^)]*\)|\[[^\]]*\])/g, '$1')
+        .replace(/(`+)(.+?)\1/g, (_m, _t, code: string) => code.trim())
+        .replace(/(\*\*|__|~~)(?=\S)(.+?)(?<=\S)\1/g, '$2')
+        .replace(/(^|[^*\w])\*(?=\S)([^*]+?)(?<=\S)\*(?![*\w])/g, '$1$2'),
+    )
+    .join('\n')
+}
+
+/**
+ * The lines of a translated block for drawing: a list item's marker apart from
+ * its text, so a wrapped item keeps its hanging indent.
+ */
+export function plainLines(md: string): { indent: string; marker: string; text: string }[] {
+  return plainText(md)
+    .split('\n')
+    .map(line => {
+      const m = /^(\s*)((?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)?(.*)$/.exec(line)
+      return { indent: m?.[1] ?? '', marker: m?.[2] ?? '', text: m?.[3] ?? line }
+    })
+}
+
 /** Blocks for the stacked view: the original, and its translation where there is one. */
 export function stackedBlocks(plan: Plan, out: readonly (string | null)[]): { original: string; translation: string | null }[] {
   return plan.blocks
@@ -591,7 +626,8 @@ export const register: Register = (on, options) => {
       )
 
     if (view === 'stacked') {
-      // Each block as Claude wrote it, its translation dimmed under it;
+      // Each block as Claude wrote it, its translation right under it as plain
+      // text in the theme's subtle color, indented and narrower;
       // code and other untranslated blocks once, as they are.
       const rows = stackedBlocks(plan, entry.out)
       const body = (
@@ -602,7 +638,22 @@ export const register: Register = (on, options) => {
             ) : (
               <Box key={`b${i}`} flexDirection="column">
                 <Markdown text={r.original} />
-                <Markdown text={r.translation} dimColor />
+                <Box paddingLeft={2} paddingRight={4} flexDirection="column">
+                  {plainLines(r.translation).map((l, j) =>
+                    l.marker ? (
+                      <Box key={`l${j}`} flexDirection="row">
+                        <Text color="subtle">{l.indent + l.marker}</Text>
+                        <Box flexShrink={1}>
+                          <Text color="subtle">{l.text}</Text>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Text key={`l${j}`} color="subtle">
+                        {l.indent + l.text || ' '}
+                      </Text>
+                    ),
+                  )}
+                </Box>
               </Box>
             ),
           )}
@@ -652,8 +703,11 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {row}
-        <Box paddingLeft={2}>
-          <Text dimColor>↳ {e.props.text}</Text>
+        <Box paddingLeft={2} flexDirection="row">
+          <Text dimColor>↳ </Text>
+          <Box flexShrink={1}>
+            <Text dimColor>{e.props.text}</Text>
+          </Box>
         </Box>
       </Box>
     )

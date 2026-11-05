@@ -3,7 +3,7 @@ import type { On } from 'claude-code'
 
 import { translateUnits, type EngineConfig, type Io } from '../hooks/engines'
 import { maskText, planMarkdown } from '../hooks/markdown'
-import { interleave, stackedBlocks } from '../hooks/register'
+import { interleave, plainLines, plainText, stackedBlocks } from '../hooks/register'
 import { pickLanguage, toLanguageCode } from '../hooks/language'
 
 const USAGE = { input_tokens: 1, output_tokens: 1, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }
@@ -91,7 +91,8 @@ test('the sent prompt row shows what was typed, and the English under it', async
       props: { text: 'Why is `fetchUser()` slow?', origin: { kind: 'composer' }, isExpanded: true },
     } as never)
     expect((await ui.find({ type: 'Text', text: /이 함수/ }))?.text).toBe('`fetchUser()` 이 함수 왜 느린지 봐줘')
-    expect((await ui.find({ type: 'Text', text: /↳/ }))?.text).toBe('↳ Why is `fetchUser()` slow?')
+    expect((await ui.find({ type: 'Text', text: /↳/ }))?.text).toBe('↳ ')
+    expect((await ui.find({ type: 'Text', text: /^Why is/ }))?.text).toBe('Why is `fetchUser()` slow?')
     await ui.unmount()
   }
 })
@@ -298,7 +299,7 @@ test('at the end of a turn the reply blocks are read back and translated', { opt
   await ui.unmount()
 })
 
-test('the stacked view keeps the original and dims the translation under it, code once', async ($, on) => {
+test('the stacked view keeps the original and mutes the translation under it, code once', async ($, on) => {
   const clock = mock.clock(on)
   fakeModel(on, ko)
   engineStandIn(on)
@@ -322,12 +323,25 @@ test('the stacked view keeps the original and dims the translation under it, cod
     const en1 = await ui.find({ type: 'Markdown', text: /^The loop calls/ })
     expect(en1?.text).toBe('The loop calls `fetchUser()` on every pass.')
     expect(en1?.props.dimColor).toBeUndefined()
-    const ko1 = await ui.find({ type: 'Markdown', text: /루프가 매번/ })
-    expect(ko1?.text).toBe('루프가 매번 `fetchUser()`를 호출해요.')
-    expect(ko1?.props.dimColor).toBe(true)
+    // the translation is plain text in the subtle color: no inline code colors
+    expect(await ui.find({ type: 'Markdown', text: /루프가 매번/ })).toBeUndefined()
+    const ko1 = await ui.find({ type: 'Text', text: /루프가 매번/ })
+    expect(ko1?.text).toBe('루프가 매번 fetchUser()를 호출해요.')
+    expect(ko1?.props.color).toBe('subtle')
     expect((await ui.find({ type: 'Markdown', text: /for \(const id/ }))?.text).toBe('```ts\nfor (const id of ids) await fetchUser(id)\n```')
     await ui.unmount()
   }
+})
+
+test('plainText takes out inline marks and keeps list markers; plainLines splits the marker off', () => {
+  expect(plainText('- **Promise.all**: `tasks`가 끝나면 [문서](https://x.y)를 보세요')).toBe('- Promise.all: tasks가 끝나면 문서를 보세요')
+  expect(plainText('## 제목 `a`\n> 인용 *강조* snake_case_name a*b')).toBe('제목 a\n인용 강조 snake_case_name a*b')
+  expect(plainText('``a `b` c`` 끝 ~~옛~~')).toBe('a `b` c 끝 옛')
+  expect(plainLines('1. 첫째\n   - [x] 둘째\n이어지는 줄')).toEqual([
+    { indent: '', marker: '1. ', text: '첫째' },
+    { indent: '   ', marker: '- [x] ', text: '둘째' },
+    { indent: '', marker: '', text: '이어지는 줄' },
+  ])
 })
 
 test('stackedBlocks pairs each translated block with its English and leaves code alone', () => {
@@ -357,7 +371,7 @@ test('during a turn a block is translated once it stops changing, before the tur
   await clock.settle()
   expect(calls).toEqual([['The loop calls ⟦0⟧ on every pass.']])
   const ui = await draw('The loop calls `fetchUser()` on every pass.')
-  expect(await ui.find({ type: 'Markdown', text: /루프가 매번/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /루프가 매번/ })).toBeDefined()
   await ui.unmount()
 })
 

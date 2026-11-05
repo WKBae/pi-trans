@@ -118,7 +118,7 @@ are drawn by the engine untouched.
 | Mode | What is drawn | Code blocks |
 | --- | --- | --- |
 | `auto` (default) | `side` when the transcript is ≥ 140 columns, else `stacked` | — |
-| `stacked` | each block as Claude wrote it, its translation dimmed right under it | drawn once, untranslated |
+| `stacked` | each block as Claude wrote it; right under it the translation as plain text (inline marks taken out) in the theme's `subtle` color, 2 columns in and 4 short of the right edge; a list item keeps its hanging indent | drawn once, untranslated |
 | `interleave` | each prose/heading/list/quote/table block in English, then its translation right under it in the accent color behind a `▎` gutter | drawn once, untranslated |
 | `side` | one row per block: English left, translation right, aligned block by block | drawn once at full width |
 | `translated` | the translated document only, reads like a native reply; English is one keypress away (`/translate view`) | in place, untranslated |
