@@ -39,7 +39,7 @@ const INLINE_PATTERNS: RegExp[] = [
   /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g,
   // paths: rooted, home, relative, or with two or more slashes
   /(?<![\w/.~-])(?:~|\.{1,2})?\/[\w.@+-]+(?:\/[\w.@+-]*)*(?::\d+(?::\d+)?)?/g,
-  /(?<![\w/.~-])(?:~|\.{1,2})\/?(?:[\w.@+-]+\/?)*(?::\d+(?::\d+)?)?(?=[\s,;:!?)\]]|$)/g,
+  /(?<![\w/.~-])(?:~|\.{1,2})\/(?:[\w.@+-]+\/?)*(?::\d+(?::\d+)?)?(?=[\s,;:!?)\]]|$)/g,
   /(?<![\w/.-])[\w.@+-]+\/[\w.@+-]+\/[\w.@+/-]*(?::\d+(?::\d+)?)?/g,
   /(?<![\w/.-])[\w@+-]+(?:\/[\w@+-]+)*\/[\w@+-]+\.[A-Za-z0-9]{1,8}(?::\d+(?::\d+)?)?(?![\w])/g,
   // bare file names with a known extension
@@ -50,13 +50,14 @@ const INLINE_PATTERNS: RegExp[] = [
   /\$\{[^}\s]+\}|\$[A-Za-z_][A-Za-z0-9_]*/g,
   // calls: name(), obj.method(arg)
   /(?<![\w$.])[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\([\w$.,'"]*\)/g,
+  // dotted members whose parts are each at least two characters,
+  // before the case rules so `Promise.allSettled` is one span
+  /(?<![\w$.])[A-Za-z_$][\w$]+(?:\.[A-Za-z_$][\w$]+)+(?![\w$(])/g,
   // snake_case and SCREAMING_CASE
   /(?<![\w$])[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+(?![\w$])/g,
   // camelCase and PascalCase with an inner capital
   /(?<![\w$])[a-z]+[A-Z][A-Za-z0-9]*(?![\w$])/g,
   /(?<![\w$])[A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*(?![\w$])/g,
-  // dotted members whose parts are each at least two characters
-  /(?<![\w$.])[A-Za-z_$][\w$]+(?:\.[A-Za-z_$][\w$]+)+(?![\w$(])/g,
 ]
 
 const TRAILING_PUNCT = /[.,;:!?'"]$/

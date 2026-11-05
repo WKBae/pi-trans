@@ -60,8 +60,10 @@ the unit.
 7. Paths: `~/…`, `./…`, `../…`, `/a/b`, `a/b/c.ts`, with an optional `:line[:col]`; bare file names with
    a known extension (`register.tsx`, `plugin.json`, `README.md:12`).
 8. Command-line flags `--flag`, `--flag=value`.
-9. Identifiers: calls `name()` / `obj.method()`, `snake_case`, `SCREAMING_CASE` (2+ parts), `camelCase`,
-   `$ENV_VAR`, `${…}`, dotted members `a.b.c` whose parts are each ≥2 chars.
+9. Identifiers: calls `name()` / `obj.method()`, dotted members `a.b.c` whose parts are each ≥2 chars
+   (before the case rules, so `Promise.allSettled` is one span), `snake_case`, `SCREAMING_CASE` (2+ parts),
+   `camelCase`, `$ENV_VAR`, `${…}`. A lone `.`, `..` or `~` is a path only with a `/` after it, so a
+   sentence's period is never masked.
 10. Emphasis markers (`**`, `__`, `*`, `_`, `~~`) are NOT masked: the translator moves them with the words.
 
 `restoreUnit` accepts `⟦ 0 ⟧` spacing variants, requires each `⟦i⟧` (i < spans.length) exactly once and

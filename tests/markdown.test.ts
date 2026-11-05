@@ -160,3 +160,10 @@ test('script detection ignores code', () => {
   expect(scriptShare('汉字', 'Japanese')).toBe(0)
   expect(scriptShare('', 'Hangul')).toBe(0)
 })
+
+test('a sentence period after Hangul is not masked; dotted members are one span', () => {
+  const u = maskText('Promise.all과 Promise.allSettled 차이를 알려줘. 코드와 파일은 빼고')
+  expect(u?.spans).toEqual(['Promise.all', 'Promise.allSettled'])
+  expect(u?.text).toBe('⟦0⟧과 ⟦1⟧ 차이를 알려줘. 코드와 파일은 빼고')
+  expect(maskText('see ./src and ~/x, then . and .. alone')?.spans).toEqual(['./src', '~/x'])
+})
