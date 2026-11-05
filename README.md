@@ -65,7 +65,7 @@ Set at install time, or under `pluginConfigs["cc-trans"].options` in settings.
 claude --plugin-dir .          # load it
 claude plugin validate .
 claude plugin test .
-vhs demo/demo.tape && END=21 demo/render.sh   # re-record the demo (needs vhs, ffmpeg, gifsicle)
+vhs demo/demo.tape && demo/render.sh   # re-record the demo (needs vhs, ffmpeg, gifsicle)
 ```
 
 See [DESIGN.md](DESIGN.md) for the unit model and the display rules.
