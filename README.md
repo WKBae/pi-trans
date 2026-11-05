@@ -7,7 +7,7 @@ English replies are shown with a translation. Code blocks, inline code, paths, U
 identifiers never go through the translator, and Markdown structure (headings, lists, quotes, tables)
 is kept line for line.
 
-```
+~~~
 > `fetchUser()` 이 함수 왜 느린지 봐줘
   ↳ Why is `fetchUser()` slow?
 
@@ -17,7 +17,7 @@ is kept line for line.
   ```ts
   for (const id of ids) await fetchUser(id)
   ```
-```
+~~~
 
 ## Install
 
