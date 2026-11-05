@@ -18,7 +18,6 @@ const VIEWS: View[] = ['auto', 'interleave', 'side', 'below', 'translated', 'ori
 const PERSON_ORIGINS = new Set(['composer', 'bridge', 'sdk'])
 const MAX_IN_FLIGHT = 3
 const PREVIEW_DELAY_MS = 700
-const PROMPT_DEADLINE_MS = 20_000
 const SIDE_MIN_COLUMNS = 140
 
 // ---------------------------------------------------------------------------
@@ -140,8 +139,11 @@ const promptCache = new Map<string, { english: string; engine: string }>()
 const classified = new Map<string, boolean>()
 let busy = false
 let lastQueued = -1
-let previewTimer: { cancel: () => void } | null = null
+// The draft as last edited, and when; the worker previews it once it rests.
 let latestDraft = ''
+let draftChangedAt = 0
+let previewDue = false
+let previewRunning = false
 
 // --- translation ---------------------------------------------------------
 
@@ -269,14 +271,23 @@ function drainWanted($: EngineInterface) {
 
 // --- preview -------------------------------------------------------------
 
-function schedulePreview($: EngineInterface, draft: string) {
+async function schedulePreview($: EngineInterface, draft: string) {
   latestDraft = draft
-  previewTimer?.cancel()
-  previewTimer = null
-  if (!cfg.preview) return
-  previewTimer = $.clock.after(PREVIEW_DELAY_MS, () => {
-    void runPreview($, draft)
-  })
+  draftChangedAt = await $.clock.now()
+  previewDue = cfg.preview
+}
+
+/** Called by the worker: previews the draft once it has rested PREVIEW_DELAY_MS. */
+async function maybePreview($: EngineInterface) {
+  if (!previewDue || previewRunning) return
+  if ((await $.clock.now()) - draftChangedAt < PREVIEW_DELAY_MS) return
+  previewDue = false
+  previewRunning = true
+  try {
+    await runPreview($, latestDraft)
+  } finally {
+    previewRunning = false
+  }
 }
 
 async function runPreview($: EngineInterface, draft: string) {
@@ -315,6 +326,7 @@ export const register: Register = (on, options) => {
     $.clock.every(250, () => {
       drainWanted($)
       tick($)
+      void maybePreview($)
     })
     return next(e)
   })
@@ -354,16 +366,13 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (e.command || e.isMeta || !PERSON_ORIGINS.has(e.origin.kind)) return next(e)
     if (!(await read($, enabledAtom))) return next(e)
-    previewTimer?.cancel()
+    previewDue = false
     if (!(await needsTranslation($, e.text))) return next(e)
 
     $.ui.status(t(cfg.language, 'translatingPrompt', engineLabel))
     let r: Awaited<ReturnType<typeof translatePrompt>>
     try {
-      r = await Promise.race([
-        translatePrompt($, e.text),
-        $.clock.sleep(PROMPT_DEADLINE_MS).then(() => ({ error: 'timed out' })),
-      ])
+      r = await translatePrompt($, e.text)
     } catch (err) {
       r = { error: err instanceof Error ? err.message : String(err) }
     } finally {
@@ -391,13 +400,13 @@ export const register: Register = (on, options) => {
 
   on('prompt.edit', async ($, e, next) => {
     const box = await next(e)
-    schedulePreview($, box.text)
+    await schedulePreview($, box.text)
     return box
   })
 
   on('prompt.change', async ($, e, next) => {
     const r = await next(e)
-    schedulePreview($, e.text)
+    await schedulePreview($, e.text)
     return r
   })
 
@@ -453,7 +462,9 @@ export const register: Register = (on, options) => {
     if (!entry) {
       // Not appended in this session (a resumed transcript), or still
       // streaming: ask for it once the turn is over and it is in view.
-      if (!busy && e.props.onScreen !== null) wanted.set(key, text)
+      // Only where the surface says it is on screen, so resuming a long
+      // transcript does not send every old reply at once.
+      if (!busy && e.props.onScreen) wanted.set(key, text)
       return next(e)
     }
     if (entry.status === 'skipped') return next(e)

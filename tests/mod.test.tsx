@@ -211,3 +211,41 @@ test('the command engine speaks JSON over stdin and stdout', async () => {
   expect(r.out).toEqual(['안녕'])
   expect(r.engine).toBe('command')
 })
+
+test('a resting draft is previewed above the prompt, and Enter reuses it', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = fakeModel(on, s => (s === '이 함수 왜 느린지 봐줘' ? 'Why is this function slow?' : `[en] ${s}`))
+  const draft = '이 함수 왜 느린지 봐줘'
+  on('prompt.edit', () => ({ text: draft, cursor: draft.length }))
+  let sent = ''
+  on('prompt.submit', (_$, e) => {
+    sent = e.text
+    return { text: e.text }
+  })
+  engineStandIn(on)
+  await start($, on)
+  await $.prompt.edit({ origin: { kind: 'key' }, text: '', cursor: 0, start: 0, end: 0, inputText: draft } as never)
+
+  const BAND = {
+    plugin: 'cc-trans',
+    component: 'AbovePrompt',
+    requestId: 'band',
+    props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 80, scroll: { offset: 0, bodyRows: 10 }, view: {} },
+  } as const
+
+  // still typing: nothing yet
+  await clock.advance(300)
+  let ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as never)
+  expect(await ui.find({ type: 'Text', text: /EN ▸/ })).toBeUndefined()
+  await ui.unmount()
+
+  await clock.advance(800)
+  await clock.settle()
+  ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as never)
+  expect((await ui.find({ type: 'Text', text: /slow/ }))?.text).toBe('Why is this function slow?')
+  await ui.unmount()
+
+  await $.prompt.submit({ text: draft, wait: false, origin: { kind: 'composer' } })
+  expect(sent).toBe('Why is this function slow?')
+  expect(calls).toHaveLength(1)
+})
