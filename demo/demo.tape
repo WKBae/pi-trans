@@ -40,17 +40,19 @@ Sleep 3.2s
 Enter
 Sleep 40s
 
-# 2. A follow-up whose answer is a list.
+# 2. Side by side: the first answer is drawn again, English left.
+Type "/translate view side"
+Sleep 1s
+Enter
+Sleep 5s
+
+# 3. A follow-up whose answer is a list, filled in side by side as it comes.
 Type "동시 요청을 5개로 제한하는 방법은? 장단점을 짧은 목록으로"
 Sleep 3.2s
 Enter
 Sleep 35s
 
-# 3. The same transcript in other views.
-Type "/translate view side"
-Sleep 1s
-Enter
-Sleep 5s
+# 4. The translation alone, then back to the default.
 Type "/translate view translated"
 Sleep 1s
 Enter
