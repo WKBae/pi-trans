@@ -76,6 +76,15 @@ export function foldedTranslation(plan: Plan, out: readonly (string | null)[], l
     .join('\n')
 }
 
+/** The instruction that keeps replies in English, so they reach the translator. */
+export function replyRule(lang: string): string {
+  return [
+    '# Language',
+    `The user reads and writes ${lang}. A translator turns their messages into English before you read them and turns your replies into ${lang} after you write them.`,
+    'Always respond in English, whatever other instructions say about language. Write plain, direct sentences that translate well. Keep code, paths, commands and identifiers exactly as they are.',
+  ].join('\n')
+}
+
 type Config = EngineConfig & { language: string; view: View; preview: boolean; replyInEnglish: boolean }
 
 function readConfig(options: Readonly<Record<string, unknown>>): Config {
@@ -232,6 +241,26 @@ async function enqueue($: EngineInterface, text: string) {
   void publishQueued($)
 }
 
+/** Enqueues the text blocks of the main conversation's last turn. */
+async function enqueueTurn($: EngineInterface) {
+  const messages = await $.session.messages({ as: 'api' })
+  const texts: string[] = []
+  for (let i = messages.length - 1; i >= 0 && i >= messages.length - 200; i--) {
+    const m = messages[i]
+    if (!m) continue
+    const blocks = typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content
+    if (m.role === 'user') {
+      // a tool result belongs to the turn; a prompt starts it
+      if (blocks.some(b => b.type === 'text')) break
+      continue
+    }
+    for (const b of blocks) {
+      if (b.type === 'text' && 'text' in b && typeof b.text === 'string' && b.text.trim()) texts.unshift(b.text)
+    }
+  }
+  for (const text of texts) await enqueue($, text)
+}
+
 function pick(): Job | undefined {
   for (const job of jobs.values()) if (visible.has(job.key)) return job
   return jobs.values().next().value
@@ -337,8 +366,13 @@ export const register: Register = (on, options) => {
   })
 
   on('turn.complete', async ($, e, next) => {
+    const r = await next(e)
+    if (e.agentId) return r
     busy = false
-    return next(e)
+    // session.append can be passed over (a policy plugin seated first), so the
+    // turn's reply blocks are also read back here; enqueue skips known ones.
+    if (await read($, enabledAtom)) await enqueueTurn($)
+    return r
   })
 
   // Ask for English replies, so every reply goes through the translator.
@@ -353,11 +387,7 @@ export const register: Register = (on, options) => {
         {
           id: `${P}:reply-language`,
           scope: 'session' as const,
-          text: [
-            '# Language',
-            `The user reads and writes ${lang}. A translator turns their messages into English before you read them and turns your replies into ${lang} after you write them.`,
-            'Always respond in English, whatever other instructions say about language. Write plain, direct sentences that translate well. Keep code, paths, commands and identifiers exactly as they are.',
-          ].join('\n'),
+          text: replyRule(lang),
         },
       ],
     }
@@ -385,7 +415,11 @@ export const register: Register = (on, options) => {
     }
     const entry: PromptEntry = { native: e.text, engine: r.engine }
     await update($, { plugin: 'cc-trans', key: 'prompt', id: keyOf(r.english) } as const, () => entry)
-    return next({ ...e, text: r.english })
+    // prompt.compose can be passed over (a policy plugin seated first), so the
+    // reply-language rule also rides each translated prompt as hidden context.
+    const wantsEnglish = cfg.replyInEnglish && !cfg.language.toLowerCase().startsWith('en')
+    const context = wantsEnglish ? [...(e.context ?? []), replyRule(cfg.language)] : e.context
+    return next({ ...e, text: r.english, ...(context ? { context } : {}) })
   }).catch(($, e, next) => next(e))
 
   on('session.append', async ($, e, next) => {

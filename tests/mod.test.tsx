@@ -249,3 +249,47 @@ test('a resting draft is previewed above the prompt, and Enter reuses it', async
   expect(sent).toBe('Why is this function slow?')
   expect(calls).toHaveLength(1)
 })
+
+test('a translated prompt carries the reply-in-English rule as hidden context', async ($, on) => {
+  mock.clock(on)
+  fakeModel(on, ko)
+  let context: readonly string[] | undefined
+  on('prompt.submit', (_$, e) => {
+    context = e.context
+    return { text: e.text }
+  })
+  await start($, on)
+  await $.prompt.submit({ text: '`fetchUser()` 이 함수 왜 느린지 봐줘', wait: false, origin: { kind: 'composer' } })
+  expect(context?.[0]).toContain('Always respond in English')
+})
+
+test('at the end of a turn the reply blocks are read back and translated', async ($, on) => {
+  const clock = mock.clock(on)
+  const calls = fakeModel(on, ko)
+  engineStandIn(on)
+  on('session.messages', () => ({
+    value: [
+      { role: 'user', content: [{ type: 'text', text: 'earlier prompt' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Old reply.' }] },
+      { role: 'user', content: [{ type: 'text', text: 'Why is this slow?' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Move it out:' }, { type: 'tool_use', id: 't1', name: 'Read', input: {} }] },
+      { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'x' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'Fix the loop' }] },
+    ],
+  }))
+  on('turn.complete', (_$, e) => ({ text: e.answer }))
+  await start($, on)
+  await $.turn.complete({ answer: 'Fix the loop', durationMs: 1, isAborted: false, turnId: 'x', reason: 'end_turn' } as never)
+  await clock.advance(300)
+  await clock.settle()
+  expect(calls.flat().sort()).toEqual(['Fix the loop', 'Move it out:'])
+  const ui = await $.ui.mount({
+    plugin: 'cc-trans',
+    surface: 'terminal',
+    component: 'AssistantMessage',
+    requestId: 'r2',
+    props: { text: 'Move it out:', isFirstOfReply: true },
+  } as never)
+  expect((await ui.find({ type: 'Text', text: /Move/ }))?.text).toBe('Move it out:\n> 밖으로 옮기세요:')
+  await ui.unmount()
+})
