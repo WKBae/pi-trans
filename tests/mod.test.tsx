@@ -294,7 +294,7 @@ test('at the end of a turn the reply blocks are read back and translated', { opt
   await ui.unmount()
 })
 
-test('the stacked view puts the translation first and the English dimmed under it, code once', async ($, on) => {
+test('the stacked view keeps the original and dims the translation under it, code once', async ($, on) => {
   const clock = mock.clock(on)
   fakeModel(on, ko)
   engineStandIn(on)
@@ -315,10 +315,12 @@ test('the stacked view puts the translation first and the English dimmed under i
       requestId: 'r3',
       props: { text: REPLY, isFirstOfReply: true },
     } as never)
-    const ko1 = await ui.find({ type: 'Markdown', text: /루프가 매번/ })
-    expect(ko1?.text).toBe('루프가 매번 `fetchUser()`를 호출해요.')
     const en1 = await ui.find({ type: 'Markdown', text: /^The loop calls/ })
     expect(en1?.text).toBe('The loop calls `fetchUser()` on every pass.')
+    expect(en1?.props.dimColor).toBeUndefined()
+    const ko1 = await ui.find({ type: 'Markdown', text: /루프가 매번/ })
+    expect(ko1?.text).toBe('루프가 매번 `fetchUser()`를 호출해요.')
+    expect(ko1?.props.dimColor).toBe(true)
     expect((await ui.find({ type: 'Markdown', text: /for \(const id/ }))?.text).toBe('```ts\nfor (const id of ids) await fetchUser(id)\n```')
     await ui.unmount()
   }
@@ -327,8 +329,9 @@ test('the stacked view puts the translation first and the English dimmed under i
 test('stackedBlocks pairs each translated block with its English and leaves code alone', () => {
   const plan = planMarkdown(REPLY)
   const rows = stackedBlocks(plan, plan.units.map(u => `[ko] ${u.text}`))
-  expect(rows.map(r => r.english === null)).toEqual([false, false, true, false])
-  expect(rows[2]?.main).toContain('for (const id of ids)')
+  expect(rows.map(r => r.translation === null)).toEqual([false, false, true, false])
+  expect(rows[1]?.original).toBe('The loop calls `fetchUser()` on every pass.')
+  expect(rows[2]?.original).toContain('for (const id of ids)')
 })
 
 test('during a turn a block is translated once it stops changing, before the turn ends', async ($, on) => {

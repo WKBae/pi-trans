@@ -21,7 +21,7 @@
     "view": {
       "type": "string",
       "title": "How replies are shown",
-      "description": "auto: side by side when the terminal is wide, else stacked. stacked: each paragraph in your language, its English dimmed under it. interleave: each paragraph followed by its translation. side: English left, translation right. below: English, then the whole translation. translated: translation only. original: English only.",
+      "description": "auto: side by side when the terminal is wide, else stacked. stacked: each paragraph as Claude wrote it, its translation dimmed under it. interleave: each paragraph followed by its translation. side: English left, translation right. below: English, then the whole translation. translated: translation only. original: English only.",
       "default": "auto",
       "options": ["auto", "stacked", "interleave", "side", "below", "translated", "original"]
     },

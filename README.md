@@ -33,7 +33,8 @@ is kept line for line.
   screen first. Only prose goes out: each line is split from its Markdown marker, and every code
   span is replaced by a placeholder `⟦0⟧` and put back from the original bytes afterwards.
 - **Views** (`/translate view <mode>`):
-  - `auto`: side by side when the terminal is 140+ columns wide, otherwise interleaved.
+  - `auto`: side by side when the terminal is 140+ columns wide, otherwise stacked.
+  - `stacked`: each paragraph as Claude wrote it, its translation dimmed under it.
   - `interleave`: each paragraph, then its translation as a quote.
   - `side`: English left, translation right.
   - `below`: the English reply, then the whole translation (code folded).

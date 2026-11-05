@@ -63,17 +63,17 @@ export function interleave(plan: Plan, out: readonly (string | null)[]): string 
     .join('\n')
 }
 
-/** Blocks for the stacked view: the translation, and the English it came from. */
-export function stackedBlocks(plan: Plan, out: readonly (string | null)[]): { main: string; english: string | null }[] {
+/** Blocks for the stacked view: the original, and its translation where there is one. */
+export function stackedBlocks(plan: Plan, out: readonly (string | null)[]): { original: string; translation: string | null }[] {
   return plan.blocks
     .filter(block => block.kind !== 'blank')
     .map(block => {
       if (!TRANSLATABLE.has(block.kind) || !block.parts.some(p => typeof p !== 'string')) {
-        return { main: block.original, english: null }
+        return { original: block.original, translation: null }
       }
       const tr = buildBlock(plan, block, out)
-      if (tr == null || tr === block.original) return { main: block.original, english: null }
-      return { main: tr, english: block.original }
+      if (tr == null || tr === block.original) return { original: block.original, translation: null }
+      return { original: block.original, translation: tr }
     })
 }
 
@@ -587,18 +587,18 @@ export const register: Register = (on, options) => {
       )
 
     if (view === 'stacked') {
-      // Each block in the person's language, its English dimmed under it;
+      // Each block as Claude wrote it, its translation dimmed under it;
       // code and other untranslated blocks once, as they are.
       const rows = stackedBlocks(plan, entry.out)
       const body = (
         <Box flexDirection="column" rowGap={1}>
           {rows.map((r, i) =>
-            r.english === null ? (
-              <Markdown key={`b${i}`} text={r.main} />
+            r.translation === null ? (
+              <Markdown key={`b${i}`} text={r.original} />
             ) : (
               <Box key={`b${i}`} flexDirection="column">
-                <Markdown text={r.main} />
-                <Markdown text={r.english} dimColor />
+                <Markdown text={r.original} />
+                <Markdown text={r.translation} dimColor />
               </Box>
             ),
           )}
