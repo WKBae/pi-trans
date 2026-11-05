@@ -119,7 +119,7 @@ test('a reply is translated in the background and drawn interleaved, code once',
     requestId: 'r1',
     props: { text: REPLY, isFirstOfReply: true },
   } as never)
-  expect(await ui.find({ type: 'Text', text: /번역 중/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /translating…/ })).toBeDefined()
   await ui.unmount()
 
   await clock.advance(300)
@@ -436,6 +436,22 @@ test('with Japanese set in Claude Code settings, Japanese prompts are translated
   await $.prompt.submit({ text: '이 함수 왜 느려', wait: false, origin: { kind: 'composer' } })
   expect(sent).toEqual(['[en] この関数はなぜ遅いですか', '이 함수 왜 느려'])
   expect(calls).toHaveLength(1)
+})
+
+test('with Chinese set, Chinese prompts are translated, and the command answers in English', async ($, on) => {
+  mock.clock(on)
+  const calls = fakeModel(on, s => `[en] ${s}`)
+  const sent: string[] = []
+  on('prompt.submit', (_$, e) => {
+    sent.push(e.text)
+    return { text: e.text }
+  })
+  await start($, on, { settings: { language: 'Chinese' }, env: { LANG: 'ko_KR.UTF-8' } })
+  await $.prompt.submit({ text: '这个函数为什么这么慢', wait: false, origin: { kind: 'composer' } })
+  expect(sent).toEqual(['[en] 这个函数为什么这么慢'])
+  expect(calls).toHaveLength(1)
+  const r = await $.command.run({ command: 'translate', args: 'view side' } as never)
+  expect(JSON.stringify(r)).toContain('Replies are shown as: side')
 })
 
 test('with no language set anywhere nothing is translated', async ($, on) => {

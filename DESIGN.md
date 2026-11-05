@@ -128,8 +128,8 @@ are drawn by the engine untouched.
 
 States, drawn quietly at the end of the block:
 
-- pending: `· 번역 중…` dim, only after 300 ms (no flicker for cache hits)
-- failed: `· 번역 실패: <reason>` dim red; units that failed alone fall back to English inline
+- pending: `⋯ translating…` dim, only after 300 ms (no flicker for cache hits)
+- failed: `translation failed: <reason>` dim red; units that failed alone fall back to English inline
 - fallback engine: `· haiku` dim, only when the engine differs from the configured one
 
 Reply translation runs off the turn: `session.append` (door `response`, main thread, text blocks) records a
@@ -149,6 +149,10 @@ re-drains it instead of leaving blocks at "번역 중…".
   `isExpanded` in both).
 
 ### Status and settings
+
+The mod's own words (command results, status, pending and failure notes, the hint) are English, like
+Claude Code's own interface, whatever the person's language: only translations are in their language.
+
 
 - `PromptHint.tail`: `ko↔en · haiku` (and `· 3 queued` while the worker has work).
 - `/translate` with no argument opens a small settings pane (engine, language, view, preview, on/off);

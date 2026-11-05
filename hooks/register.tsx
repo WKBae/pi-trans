@@ -114,12 +114,12 @@ export function stackedBlocks(plan: Plan, out: readonly (string | null)[]): { or
 }
 
 /** The translation with code blocks folded to one line, for the `below` view. */
-export function foldedTranslation(plan: Plan, out: readonly (string | null)[], lang: string): string {
+export function foldedTranslation(plan: Plan, out: readonly (string | null)[]): string {
   return plan.blocks
     .map(block => {
       if (block.kind === 'code') {
         const lines = block.original.split('\n').length
-        return `\`⋯ ${t(lang, 'code')} (${lines})\``
+        return `\`⋯ ${t('code')} (${lines})\``
       }
       return block.parts.map(p => (typeof p === 'string' ? p : (out[p.unit] ?? unmaskAt(plan, p.unit)))).join('')
     })
@@ -475,7 +475,7 @@ export const register: Register = (on, options) => {
     previewDue = false
     if (!(await needsTranslation($, e.text))) return next(e)
 
-    $.ui.status(t(cfg.language, 'translatingPrompt', engineLabel))
+    $.ui.status(t('translatingPrompt', engineLabel))
     let r: Awaited<ReturnType<typeof translatePrompt>>
     try {
       r = await translatePrompt($, e.text)
@@ -486,7 +486,7 @@ export const register: Register = (on, options) => {
     }
     await update($, previewAtom, () => null)
     if ('error' in r) {
-      $.ui.toast(t(cfg.language, 'promptFailed', r.error))
+      $.ui.toast(t('promptFailed', r.error))
       return next(e)
     }
     const entry: PromptEntry = { native: e.text, engine: r.engine }
@@ -519,38 +519,37 @@ export const register: Register = (on, options) => {
 
   on('command.run', { command: 'translate' }, async ($, e) => {
     const [word, arg] = e.args.trim().split(/\s+/)
-    const lang = cfg.language
     if (!word || word === 'on' || word === 'off') {
       const turnOn = word ? word === "on" : !(await read($, enabledAtom))
       await update($, enabledAtom, () => turnOn)
       if (!turnOn) await update($, previewAtom, () => null)
-      return { text: t(lang, turnOn ? "turnedOn" : "turnedOff") }
+      return { text: t(turnOn ? "turnedOn" : "turnedOff") }
     }
     if (word === 'view') {
-      if (!arg || !VIEWS.includes(arg as View)) return { text: t(lang, 'viewUsage', VIEWS.join(' · ')) }
+      if (!arg || !VIEWS.includes(arg as View)) return { text: t('viewUsage', VIEWS.join(' · ')) }
       await update($, viewAtom, () => arg as View)
-      return { text: t(lang, 'viewSet', arg) }
+      return { text: t('viewSet', arg) }
     }
     if (word === 'status') {
       const enabled = await read($, enabledAtom)
       const view = (await read($, viewAtom)) ?? cfg.view
       const settings = (await $.settings.read()) as Record<string, unknown>
       const lines = [
-        `${t(lang, 'status')}: ${enabled ? 'on' : 'off'}`,
-        `${t(lang, 'language')}: ${cfg.language} ↔ en (${t(lang, `from_${languageFrom}`)})`,
-        `${t(lang, 'engine')}: ${engineLabel}${cfg.kind !== 'haiku' && cfg.fallback ? ` (→ haiku)` : ''}`,
-        `${t(lang, 'view')}: ${view}`,
-        `${t(lang, 'preview')}: ${cfg.preview ? 'on' : 'off'}`,
-        `${t(lang, 'queued')}: ${jobs.size + inflight.size}`,
+        `${t('status')}: ${enabled ? 'on' : 'off'}`,
+        `${t('language')}: ${cfg.language} ↔ en (${t(`from_${languageFrom}`)})`,
+        `${t('engine')}: ${engineLabel}${cfg.kind !== 'haiku' && cfg.fallback ? ` (→ haiku)` : ''}`,
+        `${t('view')}: ${view}`,
+        `${t('preview')}: ${cfg.preview ? 'on' : 'off'}`,
+        `${t('queued')}: ${jobs.size + inflight.size}`,
       ]
-      if (cfg.kind === 'openai' && (!cfg.openaiBaseUrl || !cfg.openaiModel)) lines.push(t(lang, 'missingOpenai'))
-      if (cfg.kind === 'command' && !cfg.command) lines.push(t(lang, 'missingCommand'))
+      if (cfg.kind === 'openai' && (!cfg.openaiBaseUrl || !cfg.openaiModel)) lines.push(t('missingOpenai'))
+      if (cfg.kind === 'command' && !cfg.command) lines.push(t('missingCommand'))
       if (typeof settings.language === 'string' && settings.language) {
-        lines.push(t(lang, 'languageSetting', settings.language))
+        lines.push(t('languageSetting', settings.language))
       }
       return { text: lines.join('\n') }
     }
-    return { text: t(lang, 'usage') }
+    return { text: t('usage') }
   })
 
   // --- drawing -------------------------------------------------------------
@@ -585,14 +584,13 @@ export const register: Register = (on, options) => {
     }
 
     const { Box, Text, Markdown } = $.ui.resolve(e)
-    const lang = cfg.language
 
     if (entry.status === 'pending') {
       const row = await next(e)
       return (
         <Box flexDirection="column">
           {row}
-          <Text dimColor>  ⋯ {t(lang, 'translating')}</Text>
+          <Text dimColor>  ⋯ {t('translating')}</Text>
         </Box>
       )
     }
@@ -603,7 +601,7 @@ export const register: Register = (on, options) => {
           {row}
           <Text color="error" dimColor>
             {'  '}
-            {t(lang, 'failed')}: {entry.error ?? '?'}
+            {t('failed')}: {entry.error ?? '?'}
           </Text>
         </Box>
       )
@@ -685,7 +683,7 @@ export const register: Register = (on, options) => {
       return withFooter(await next({ ...e, props: { ...e.props, text: interleave(plan, entry.out) } }))
     }
     if (view === 'below') {
-      const below = `${text}\n\n${quote(foldedTranslation(plan, entry.out, lang))}`
+      const below = `${text}\n\n${quote(foldedTranslation(plan, entry.out))}`
       return withFooter(await next({ ...e, props: { ...e.props, text: below } }))
     }
     // side by side, block by block: the English left, its translation right;
@@ -738,7 +736,7 @@ export const register: Register = (on, options) => {
     const { Box, Text } = $.ui.resolve(e)
     const body =
       preview.status === 'failed'
-        ? t(cfg.language, 'failed')
+        ? t('failed')
         : preview.english ?? '…'
     const below = await next(e)
     return (
@@ -758,7 +756,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'PromptHint' }, async ($, e, next) => {
     if (idle() || !(await read($, enabledAtom))) return next(e)
     const queued = await read($, queuedAtom)
-    const mine = `${cfg.language}↔en · ${engineLabel}${queued > 0 ? ` · ${t(cfg.language, 'queuedShort', String(queued))}` : ''}`
+    const mine = `${cfg.language}↔en · ${engineLabel}${queued > 0 ? ` · ${t('queuedShort', String(queued))}` : ''}`
     return next({ ...e, props: { ...e.props, tail: e.props.tail ? `${e.props.tail} · ${mine}` : mine } })
   })
 }
