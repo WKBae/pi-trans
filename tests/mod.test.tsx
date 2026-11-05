@@ -254,17 +254,17 @@ test('a resting draft is previewed above the prompt, and Enter reuses it', async
   expect(calls).toHaveLength(1)
 })
 
-test('a translated prompt carries the reply-in-English rule as hidden context', async ($, on) => {
+test('a translated prompt carries nothing but the English: no added language instruction', async ($, on) => {
   mock.clock(on)
   fakeModel(on, ko)
-  let context: readonly string[] | undefined
+  let context: readonly string[] | undefined = ['unset']
   on('prompt.submit', (_$, e) => {
     context = e.context
     return { text: e.text }
   })
   await start($, on)
   await $.prompt.submit({ text: '`fetchUser()` 이 함수 왜 느린지 봐줘', wait: false, origin: { kind: 'composer' } })
-  expect(context?.[0]).toContain('Always respond in English')
+  expect(context).toBeUndefined()
 })
 
 test('at the end of a turn the reply blocks are read back and translated', { options: { view: 'interleave' } }, async ($, on) => {

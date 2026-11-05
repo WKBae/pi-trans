@@ -31,12 +31,6 @@
       "description": "Show the English of your draft above the prompt while you type; Enter then sends it with no wait.",
       "default": true
     },
-    "replyInEnglish": {
-      "type": "boolean",
-      "title": "Ask Claude to answer in English",
-      "description": "Adds a system prompt section asking for English replies (overriding a language setting), so every reply goes through the translator.",
-      "default": true
-    },
     "haikuModel": {
       "type": "string",
       "title": "Model for the haiku engine",

@@ -63,7 +63,6 @@ Set at install time, or under `pluginConfigs["cc-trans"].options` in settings.
 | `engine` | `haiku` | `haiku` · `openai` · `command` |
 | `view` | `auto` | see Views |
 | `preview` | `true` | live English preview while typing |
-| `replyInEnglish` | `true` | asks Claude to answer in English even if a `language` setting says otherwise |
 | `haikuModel` | `haiku` | model for the haiku engine |
 | `openaiBaseUrl` · `openaiModel` · `openaiApiKey` | | for the openai engine |
 | `command` | | for the command engine |

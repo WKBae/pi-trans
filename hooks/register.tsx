@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Preview, PromptEntry, ReplyEntry, View } from '../types'
 import { scriptOf, scriptShare } from './detect'
-import { languageName, translateUnits, type EngineConfig, type EngineKind, type Io } from './engines'
+import { translateUnits, type EngineConfig, type EngineKind, type Io } from './engines'
 import { pickLanguage } from './language'
 import { buildBlock, buildDocument, planMarkdown, unmask, unmaskAt, type Plan, type Unit } from './markdown'
 import { t } from './strings'
@@ -91,17 +91,7 @@ export function foldedTranslation(plan: Plan, out: readonly (string | null)[], l
     .join('\n')
 }
 
-/** The instruction that keeps replies in English, so they reach the translator. */
-export function replyRule(lang: string): string {
-  const name = languageName(lang)
-  return [
-    '# Language',
-    `The user reads and writes ${name}. A translator turns their messages into English before you read them and turns your replies into ${name} after you write them.`,
-    'Always respond in English, whatever other instructions say about language. Write plain, direct sentences that translate well. Keep code, paths, commands and identifiers exactly as they are.',
-  ].join('\n')
-}
-
-type Config = EngineConfig & { languageOption: string; language: string; view: View; preview: boolean; replyInEnglish: boolean }
+type Config = EngineConfig & { languageOption: string; language: string; view: View; preview: boolean }
 
 function readConfig(options: Readonly<Record<string, unknown>>): Config {
   const str = (v: unknown, d: string) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : d)
@@ -114,7 +104,6 @@ function readConfig(options: Readonly<Record<string, unknown>>): Config {
     kind: (['haiku', 'openai', 'command'].includes(kind) ? kind : 'haiku') as EngineKind,
     view: (VIEWS.includes(view as View) ? view : 'auto') as View,
     preview: options.preview !== false,
-    replyInEnglish: options.replyInEnglish !== false,
     haikuModel: str(options.haikuModel, 'haiku'),
     openaiBaseUrl: str(options.openaiBaseUrl, ''),
     openaiModel: str(options.openaiModel, ''),
@@ -442,24 +431,6 @@ export const register: Register = (on, options) => {
     return r
   })
 
-  // Ask for English replies, so every reply goes through the translator.
-  on('prompt.compose', async ($, e, next) => {
-    const r = await next(e)
-    if (!cfg.replyInEnglish || idle()) return r
-    const lang = cfg.language
-    const sections = r.sections.filter(s => s.id !== 'language' && !/^#\s*Language\b/.test(s.text))
-    return {
-      sections: [
-        ...sections,
-        {
-          id: `${P}:reply-language`,
-          scope: 'session' as const,
-          text: replyRule(lang),
-        },
-      ],
-    }
-  })
-
   on('prompt.submit', async ($, e, next) => {
     if (e.command || e.isMeta || !PERSON_ORIGINS.has(e.origin.kind)) return next(e)
     if (!(await read($, enabledAtom))) return next(e)
@@ -482,11 +453,8 @@ export const register: Register = (on, options) => {
     }
     const entry: PromptEntry = { native: e.text, engine: r.engine }
     await update($, { plugin: 'cc-trans', key: 'prompt', id: keyOf(r.english) } as const, () => entry)
-    // prompt.compose can be passed over (a policy plugin seated first), so the
-    // reply-language rule also rides each translated prompt as hidden context.
-    const wantsEnglish = cfg.replyInEnglish && !idle()
-    const context = wantsEnglish ? [...(e.context ?? []), replyRule(cfg.language)] : e.context
-    return next({ ...e, text: r.english, ...(context ? { context } : {}) })
+    // Only the prompt changes: asked in English, Claude answers in English.
+    return next({ ...e, text: r.english })
   }).catch(($, e, next) => next(e))
 
   on('session.append', async ($, e, next) => {
@@ -539,7 +507,7 @@ export const register: Register = (on, options) => {
       ]
       if (cfg.kind === 'openai' && (!cfg.openaiBaseUrl || !cfg.openaiModel)) lines.push(t(lang, 'missingOpenai'))
       if (cfg.kind === 'command' && !cfg.command) lines.push(t(lang, 'missingCommand'))
-      if (typeof settings.language === 'string' && settings.language && !cfg.replyInEnglish) {
+      if (typeof settings.language === 'string' && settings.language) {
         lines.push(t(lang, 'languageSetting', settings.language))
       }
       return { text: lines.join('\n') }
