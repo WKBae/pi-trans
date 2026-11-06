@@ -59,7 +59,6 @@
 | `/translate status` | 语言、引擎、视图和队列 |
 
 输入框下方的提示行会显示正在运行的内容，例如 `zh↔en · haiku · 2 queued`。
-cc-trans 自身的文字（命令结果、状态、提示行）和 Claude Code 界面一样是英文；只有译文使用你的语言。
 
 ## 你的语言
 

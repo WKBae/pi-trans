@@ -62,8 +62,6 @@ OpenRouter)나 직접 만든 프로그램(Apple Translation, DeepL, Papago)에 �
 | `/translate status` | 언어, 엔진, 보기 방식, 대기열 |
 
 프롬프트 아래 힌트에 지금 돌아가는 것이 보입니다. 예: `ko↔en · haiku · 2 queued`.
-cc-trans 자체의 문구(명령 결과, 상태, 힌트)는 Claude Code 화면처럼 영어이고, 내 언어로 나오는 것은
-번역뿐입니다.
 
 ## 내 언어 설정
 

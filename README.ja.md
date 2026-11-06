@@ -62,8 +62,6 @@ LM Studio、DeepSeek、OpenRouter）や自作のプログラム（Apple Translat
 | `/translate status` | 言語、エンジン、表示方法、キュー |
 
 プロンプトの下のヒントに、いま動いているものが表示されます（例：`ja↔en · haiku · 2 queued`）。
-cc-trans 自身のメッセージ（コマンドの結果、状態、ヒント）は Claude Code の画面と同じく英語です。
-あなたの言語で表示されるのは翻訳だけです。
 
 ## 言語の設定
 

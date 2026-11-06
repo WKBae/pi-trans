@@ -64,8 +64,6 @@ Papago).
 | `/translate status` | language, engine, view and queue |
 
 The hint under the prompt shows what is running, e.g. `ko↔en · haiku · 2 queued`.
-cc-trans's own messages (command results, status, the hint) are in English, like the rest of Claude
-Code: only the translations are in your language.
 
 ## Your language
 
