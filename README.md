@@ -1,5 +1,7 @@
 # cc-trans
 
+**English** · [한국어](README.ko.md) · [日本語](README.ja.md) · [简体中文](README.zh-CN.md)
+
 **Talk to Claude Code in your own language. Claude still works in English.**
 
 You type in Korean, Japanese, Chinese, Spanish… and Claude receives clean English. Claude answers
@@ -62,6 +64,8 @@ Papago).
 | `/translate status` | language, engine, view and queue |
 
 The hint under the prompt shows what is running, e.g. `ko↔en · haiku · 2 queued`.
+cc-trans's own messages (command results, status, the hint) are in English, like the rest of Claude
+Code: only the translations are in your language.
 
 ## Your language
 
