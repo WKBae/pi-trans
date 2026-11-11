@@ -4,7 +4,12 @@
   "description": "Write and read in your own language while the agent works in English: prompts go out translated, replies come back with a translation, code untouched.",
   "license": "MIT",
   "type": "module",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "translate",
+    "cc-trans"
+  ],
   "repository": "github:WKBae/pi-trans",
   "pi": {
     "extensions": ["./src/index.ts"]
