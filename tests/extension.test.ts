@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mock } from 'node:test'
@@ -33,6 +33,10 @@ function seen(md: string, width = 100): string {
     .join('\n')
 }
 
+type Panel = { render(width: number): string[]; handleInput(data: string): void }
+const plainTheme = { fg: (_color: string, text: string) => text, bold: (text: string) => text }
+const KEY = { up: '\x1b[A', down: '\x1b[B', enter: '\r', escape: '\x1b' }
+
 type Handler = (event: unknown, ctx: unknown) => unknown
 type Transform = (md: string, ctx: { messageType: string; isStreaming: boolean; availableWidth: number }) => string
 
@@ -57,6 +61,7 @@ async function start(
   const notes: string[] = []
   let draft = ''
   let widget: { render(width: number): string[] } | undefined
+  let panel: Panel | undefined
 
   const pi = {
     on: (name: string, fn: Handler) => handlers.set(name, fn),
@@ -64,13 +69,14 @@ async function start(
     registerCommand: (name: string, def: { handler: (args: string, ctx: unknown) => Promise<void> }) => commands.set(name, def),
     appendEntry: (customType: string, data: unknown) => entries.push({ type: 'custom', customType, data }),
   }
-  const model = { provider: 'anthropic', id: 'claude-haiku-4-5' }
+  const model = { provider: 'anthropic', id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' }
+  const other = { provider: 'openai', id: 'gpt-5-mini', name: 'GPT-5 mini' }
   const ctx = {
     mode: 'tui',
     model,
     modelRegistry: {
       find: () => model,
-      getAvailable: () => [model],
+      getAvailable: () => [model, other],
       getAll: () => [model],
       async complete(_model: unknown, context: { messages: { content: { text: string }[] }[] }) {
         const items = JSON.parse(context.messages[0]!.content[0]!.text) as string[]
@@ -87,6 +93,13 @@ async function start(
       setWidget: (_key: string, factory: (tui: unknown) => { render(width: number): string[] }) => {
         widget = factory({ invalidate() {}, requestRender() {} })
       },
+      custom: (factory: (tui: unknown, theme: unknown, keybindings: unknown, done: () => void) => Panel) =>
+        new Promise<void>(resolve => {
+          panel = factory({ requestRender() {} }, plainTheme, {}, () => {
+            panel = undefined
+            resolve()
+          })
+        }),
     },
   }
 
@@ -103,6 +116,16 @@ async function start(
       handlers.get('message_update')!({ assistantMessageEvent: { type: 'text_end', contentIndex: 0, content: text } }, ctx),
     draw: (messageType: 'user' | 'assistant', md: string, width = 100) => transform(md, { messageType, isStreaming: false, availableWidth: width }),
     command: (args: string) => commands.get('translate')!.handler(args, ctx),
+    /** Opens /translate:settings; `keys` presses keys in it, `panel()` draws it. */
+    settings: () => {
+      const closed = commands.get('translate:settings')!.handler('', ctx)
+      return {
+        closed,
+        keys: (...keys: string[]) => keys.forEach(key => panel!.handleInput(key)),
+        panel: () => (panel?.render(100).join('\n') ?? '').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''),
+      }
+    },
+    options: () => JSON.parse(readFileSync(join(dir, 'pi-trans.json'), 'utf8')) as Record<string, unknown>,
     type: (text: string) => (draft = text),
     above: (width = 80) => widget?.render(width).join('\n') ?? '',
     stop: () => handlers.get('session_shutdown')!({}, ctx),
@@ -136,7 +159,7 @@ test('English prompts, slash commands and shell lines pass through untranslated'
 test('a reply is translated in the background and drawn interleaved, code once', async () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] })
   try {
-    const pi = await start({ view: 'interleave' })
+    const pi = await start({ defaultView: 'interleave' })
     await pi.reply(REPLY)
     expect(pi.draw('assistant', REPLY)).toContain('translating…')
     await settle(300)
@@ -155,7 +178,7 @@ test('a reply is translated in the background and drawn interleaved, code once',
 test('a text block is translated when it ends, before its reply finishes streaming', async () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] })
   try {
-    const pi = await start({ view: 'interleave' })
+    const pi = await start({ defaultView: 'interleave' })
     await pi.textEnd(REPLY)
     await settle(300)
     expect(pi.draw('assistant', REPLY)).toContain('## Fix the loop · 루프 고치기')
@@ -171,7 +194,7 @@ test('a text block is translated when it ends, before its reply finishes streami
 test('the stacked view keeps the original and puts the rendered translation under it, indented', async () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] })
   try {
-    const pi = await start({ view: 'stacked' })
+    const pi = await start({ defaultView: 'stacked' })
     await pi.reply(REPLY)
     await settle(300)
     const drawn = seen(pi.draw('assistant', REPLY))
@@ -186,7 +209,7 @@ test('the stacked view keeps the original and puts the rendered translation unde
 test('in the stacked view a translated table is drawn as a table, and code keeps its parentheses', async () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] })
   try {
-    const pi = await start({ view: 'stacked' })
+    const pi = await start({ defaultView: 'stacked' })
     const reply = ['Use `nums.map(n => n * 2)` to transform.', '', '| Call | Result |', '|---|---|', '| `map()` | new array |'].join('\n')
     await pi.reply(reply)
     await settle(300)
@@ -204,13 +227,13 @@ test('in the stacked view a translated table is drawn as a table, and code keeps
 test('a resumed session draws saved translations without asking again', async () => {
   mock.timers.enable({ apis: ['setInterval', 'Date'] })
   try {
-    const first = await start({ view: 'interleave' })
+    const first = await start({ defaultView: 'interleave' })
     await first.input('`fetchUser()` 이 함수 왜 느린지 봐줘')
     await first.reply(REPLY)
     await settle(300)
     await first.stop()
     const message = { role: 'assistant', content: [{ type: 'text', text: REPLY }] }
-    const pi = await start({ view: 'interleave' }, undefined, [...first.entries, { type: 'message', message }])
+    const pi = await start({ defaultView: 'interleave' }, undefined, [...first.entries, { type: 'message', message }])
     await settle(300)
     expect(pi.calls).toHaveLength(0)
     expect(pi.draw('assistant', REPLY)).toContain('> 루프가 매번 `fetchUser()`를 호출해요.')
@@ -262,5 +285,73 @@ test('/translate off leaves prompts and replies alone, and view changes the layo
   await pi.command('on')
   await pi.command('view side')
   expect(pi.notes.at(-1)).toContain('side')
+  await pi.stop()
+})
+
+test('with defaultOn false, translation starts off', async () => {
+  const pi = await start({ defaultOn: false })
+  expect(await pi.input('이 함수 왜 느려')).toEqual({ action: 'continue' })
+  await pi.command('on')
+  expect((await pi.input('이 함수 왜 느린지 봐줘')).action).toBe('transform')
+  await pi.stop()
+})
+
+test('/translate:settings saves each change to the options file and keeps the other keys', async () => {
+  const pi = await start({ command: 'my-translate --quiet' })
+  const s = pi.settings()
+  expect(s.panel()).toContain('Default on')
+  expect(s.panel()).toContain('auto (claude-haiku-4-5)')
+
+  s.keys(KEY.enter)
+  expect(pi.options()).toEqual({ command: 'my-translate --quiet', defaultOn: false })
+
+  s.keys(KEY.down, KEY.enter, KEY.down, KEY.down, KEY.down, KEY.enter)
+  expect(pi.options().defaultView).toBe('side')
+
+  s.keys(KEY.down, KEY.down, KEY.down, KEY.enter, ...'gpt', KEY.enter)
+  expect(pi.options().model).toBe('openai/gpt-5-mini')
+  expect(s.panel()).toContain('openai/gpt-5-mini')
+
+  s.keys(KEY.enter, KEY.up, KEY.up, KEY.enter)
+  expect(pi.options().model).toBeUndefined()
+  expect(s.panel()).toContain('auto (claude-haiku-4-5)')
+
+  s.keys(KEY.escape)
+  await s.closed
+  expect(pi.options()).toEqual({ command: 'my-translate --quiet', defaultOn: false, defaultView: 'side' })
+  await pi.stop()
+})
+
+test('/translate:settings reports a file it cannot read and keeps the shown value', async () => {
+  const pi = await start({})
+  writeFileSync(join(process.env.PI_CODING_AGENT_DIR!, 'pi-trans.json'), '{ not json')
+  const s = pi.settings()
+  s.keys(KEY.enter)
+  expect(pi.notes.at(-1)).toContain('Cannot save Default on')
+  expect(s.panel()).toContain('Default on       on\n')
+  s.keys(KEY.escape)
+  await s.closed
+  await pi.stop()
+})
+
+test('the API key is masked, replaced by typing, and removed by an empty line', async () => {
+  const pi = await start({ openaiApiKey: 'sk-old' })
+  const s = pi.settings()
+  expect(s.panel()).not.toContain('sk-old')
+  s.keys(...Array(9).fill(KEY.down), KEY.enter)
+  expect(s.panel()).not.toContain('sk-old')
+  s.keys(...'sk-new', KEY.enter)
+  expect(pi.options().openaiApiKey).toBe('sk-new')
+  s.keys(KEY.enter, KEY.enter)
+  expect(pi.options().openaiApiKey).toBeUndefined()
+  s.keys(KEY.escape)
+  await s.closed
+  await pi.stop()
+})
+
+test('an options file with the older view key still sets the view', async () => {
+  const pi = await start({ view: 'interleave' })
+  await pi.command('status')
+  expect(pi.notes.at(-1)).toContain('View: interleave')
   await pi.stop()
 })

@@ -2,18 +2,18 @@
 // replies come back with a translation, code untouched.
 
 import { spawn } from 'node:child_process'
-import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { Api, Model } from '@earendil-works/pi-ai'
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext, MarkdownTransformContext } from '@earendil-works/pi-coding-agent'
 import { getAgentDir, getMarkdownTheme } from '@earendil-works/pi-coding-agent'
-import { truncateToWidth, wrapTextWithAnsi, type Component, type TUI } from '@earendil-works/pi-tui'
+import { truncateToWidth, wrapTextWithAnsi, type Component, type SelectItem, type TUI } from '@earendil-works/pi-tui'
 
 import { scriptOf, scriptShare, type Script } from './detect.ts'
 import { isEnglish, translateUnits, type EngineConfig, type EngineKind, type Io } from './engines.ts'
 import { pickLanguage } from './language.ts'
 import { buildDocument, planMarkdown, unmask, type Unit } from './markdown.ts'
+import { readOptionsFile, settingsPanel, writeOptions, type Options, type Row } from './settings.ts'
 import { t } from './strings.ts'
 import { VIEWS, type Preview, type PromptEntry, type ReplyEntry, type Saved, type View } from './types.ts'
 import { belowView, interleave, keyOf, literalLines, noteLines, plainText, sideView, stackedView } from './views.ts'
@@ -27,16 +27,17 @@ const SIDE_MIN_WIDTH = 100
 /** On resume, the last replies without a translation are translated; older ones are left alone. */
 const RESUME_REPLIES = 10
 
-export type Config = EngineConfig & { languageOption: string; view: View; preview: boolean }
+export type Config = EngineConfig & { languageOption: string; defaultOn: boolean; defaultView: View; preview: boolean }
 
 export function readConfig(options: Readonly<Record<string, unknown>>): Config {
   const str = (v: unknown, d: string) => (typeof v === 'string' && v.trim() !== '' ? v.trim() : d)
   const kind = str(options.engine, 'model')
-  const view = str(options.view, 'auto')
+  const view = str(options.defaultView, str(options.view, 'auto'))
   return {
     languageOption: str(options.language, ''),
     kind: (['model', 'openai', 'command'].includes(kind) ? kind : 'model') as EngineKind,
-    view: (VIEWS.includes(view as View) ? view : 'auto') as View,
+    defaultOn: options.defaultOn !== false,
+    defaultView: (VIEWS.includes(view as View) ? view : 'auto') as View,
     preview: options.preview !== false,
     model: str(options.model, ''),
     openaiBaseUrl: str(options.openaiBaseUrl, ''),
@@ -47,11 +48,13 @@ export function readConfig(options: Readonly<Record<string, unknown>>): Config {
   }
 }
 
-/** The options file, `~/.pi/agent/pi-trans.json`; missing or unreadable means defaults. */
-function loadOptions(): Record<string, unknown> {
+/** The options file, `~/.pi/agent/pi-trans.json`. */
+const optionsFile = () => join(getAgentDir(), `${NAME}.json`)
+
+/** The options; a missing or unreadable file means defaults. */
+function loadOptions(): Options {
   try {
-    const value: unknown = JSON.parse(readFileSync(join(getAgentDir(), `${NAME}.json`), 'utf8'))
-    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
+    return readOptionsFile(optionsFile())
   } catch {
     return {}
   }
@@ -117,7 +120,8 @@ export default function piTrans(pi: ExtensionAPI) {
   let language = 'en'
   let languageFrom: 'option' | 'locale' | 'none' = 'none'
   let script: Script = scriptOf(language)
-  let enabled = true
+  // Set from defaultOn at the first session_start, then only by /translate.
+  let enabled: boolean | undefined
   let viewOverride: View | null = null
 
   // The live session; replaced on every session_start.
@@ -149,7 +153,7 @@ export default function piTrans(pi: ExtensionAPI) {
 
   /** English readers have nothing to translate. */
   const idle = () => language.toLowerCase().startsWith('en')
-  const active = () => enabled && !idle()
+  const active = () => enabled === true && !idle()
   const io = () => ioFor(session!)
 
   function engineLabel(): string {
@@ -361,7 +365,7 @@ export default function piTrans(pi: ExtensionAPI) {
   // --- drawing ---------------------------------------------------------------
 
   function chooseView(width: number): View {
-    let view = viewOverride ?? cfg.view
+    let view = viewOverride ?? cfg.defaultView
     if (view === 'auto') view = width >= SIDE_MIN_COLUMNS ? 'side' : 'stacked'
     if (view === 'side' && width < SIDE_MIN_WIDTH) view = 'stacked'
     return view
@@ -425,6 +429,7 @@ export default function piTrans(pi: ExtensionAPI) {
     session = ctx
     ui = ctx.ui
     cfg = readConfig(loadOptions())
+    enabled ??= cfg.defaultOn
     const picked = pickLanguage(cfg.languageOption, [process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG])
     language = picked.code
     languageFrom = picked.from
@@ -538,7 +543,7 @@ export default function piTrans(pi: ExtensionAPI) {
           `${t('status')}: ${enabled ? 'on' : 'off'}`,
           `${t('language')}: ${language} ↔ en (${t(`from_${languageFrom}`)})`,
           `${t('engine')}: ${engineLabel()}${cfg.kind !== 'model' && cfg.fallback ? ' (→ model)' : ''}`,
-          `${t('view')}: ${viewOverride ?? cfg.view}`,
+          `${t('view')}: ${viewOverride ?? cfg.defaultView}`,
           `${t('preview')}: ${cfg.preview ? 'on' : 'off'}`,
           `${t('queued')}: ${jobs.size + inflight.size}`,
         ]
@@ -548,6 +553,101 @@ export default function piTrans(pi: ExtensionAPI) {
         return say(lines.join('\n'))
       }
       return say(t('usage'))
+    },
+  })
+
+  // --- /translate:settings -----------------------------------------------------
+
+  const notSet = (value: string) => value || t('notSet')
+  const onOff = (on: boolean) => (on ? 'on' : 'off')
+
+  function settingRows(ctx: ExtensionContext): Row[] {
+    const text = (id: 'openaiBaseUrl' | 'openaiModel' | 'openaiApiKey' | 'command', secret = false): Row => ({
+      id,
+      kind: 'text',
+      secret,
+      label: t(`set_${id}`),
+      description: t(`about_${id}`),
+      value: cfg[id],
+      display: secret ? value => (value ? '••••' : t('notSet')) : notSet,
+    })
+    const models = (): SelectItem[] => {
+      const items = ctx.modelRegistry.getAvailable().map(m => ({ value: `${m.provider}/${m.id}`, label: `${m.provider}/${m.id}`, description: m.name }))
+      const known = !cfg.model || items.some(item => item.value === cfg.model)
+      return [
+        { value: '', label: t('auto'), description: t('autoModelNote') },
+        ...(known ? [] : [{ value: cfg.model, label: t('unavailable', cfg.model) }]),
+        ...items,
+      ]
+    }
+    return [
+      { id: 'defaultOn', kind: 'toggle', label: t('set_defaultOn'), description: t('about_defaultOn'), value: onOff(cfg.defaultOn) },
+      {
+        id: 'defaultView',
+        kind: 'choice',
+        label: t('set_defaultView'),
+        description: t('about_defaultView'),
+        value: cfg.defaultView,
+        choices: () => VIEWS.map(v => ({ value: v, label: v, description: t(`view_${v}`) })),
+      },
+      {
+        id: 'language',
+        kind: 'text',
+        label: t('set_language'),
+        description: t('about_language'),
+        value: cfg.languageOption,
+        display: value => value || t('locale'),
+      },
+      {
+        id: 'engine',
+        kind: 'choice',
+        label: t('set_engine'),
+        description: t('about_engine'),
+        value: cfg.kind,
+        choices: () => (['model', 'openai', 'command'] as const).map(k => ({ value: k, label: k, description: t(`engine_${k}`) })),
+      },
+      {
+        id: 'model',
+        kind: 'choice',
+        search: true,
+        label: t('set_model'),
+        description: t('about_model'),
+        value: cfg.model,
+        display: value => value || t('autoModel', resolveModel(ctx, '')?.id ?? t('notSet')),
+        choices: models,
+      },
+      { id: 'preview', kind: 'toggle', label: t('set_preview'), description: t('about_preview'), value: onOff(cfg.preview) },
+      { id: 'fallback', kind: 'toggle', label: t('set_fallback'), description: t('about_fallback'), value: onOff(cfg.fallback) },
+      text('openaiBaseUrl'),
+      text('openaiModel'),
+      text('openaiApiKey', true),
+      text('command'),
+    ]
+  }
+
+  pi.registerCommand('translate:settings', {
+    description: 'Change the translation settings.',
+    async handler(_args, ctx) {
+      if (ctx.mode !== 'tui') return ctx.ui.notify(t('settingsNeedTui', optionsFile()), 'info')
+      const rows = settingRows(ctx)
+      const save = (id: string, value: string) => {
+        const row = rows.find(r => r.id === id)!
+        try {
+          const stored = row.kind === 'toggle' ? value === 'on' : value
+          cfg = readConfig(writeOptions(optionsFile(), { [id]: stored }))
+        } catch (err) {
+          ctx.ui.notify(t('settingsFailed', row.label, err instanceof Error ? err.message : String(err)), 'error')
+          return false
+        }
+        if (!cfg.preview) preview = null
+        repaint = true
+        updateStatus()
+        flush()
+        return true
+      }
+      await ctx.ui.custom<void>((tuiRef, theme, _keybindings, done) =>
+        settingsPanel(theme, t('settingsTitle'), rows, save, () => done(undefined), () => tuiRef.requestRender()),
+      )
     },
   })
 }

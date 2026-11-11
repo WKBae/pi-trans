@@ -61,6 +61,7 @@ OpenRouter) or at your own program (Apple Translation, DeepL, Papago).
 | `/translate` | turn translation on or off |
 | `/translate view <mode>` | change how replies are shown |
 | `/translate status` | language, engine, view and queue |
+| `/translate:settings` | change the options below |
 
 The footer shows what is running, e.g. `ko↔en · claude-haiku-4-5 · 2 queued`.
 
@@ -82,17 +83,18 @@ When `openai` or `command` fails, `model` translates instead (unless `fallback` 
 
 ## Options
 
-Put them in `~/.pi/agent/pi-trans.json`, then `/reload`:
+Change them with `/translate:settings`, or put them in `~/.pi/agent/pi-trans.json` and `/reload`:
 
 ```json
-{ "language": "ko", "view": "stacked" }
+{ "language": "ko", "defaultView": "stacked" }
 ```
 
 | Option | Default | |
 | --- | --- | --- |
 | `language` | empty | your language; empty follows the system locale |
 | `engine` | `model` | `model` · `openai` · `command` |
-| `view` | `auto` | see the views above |
+| `defaultOn` | `true` | translation is on when Pi starts |
+| `defaultView` | `auto` | see the views above |
 | `preview` | `true` | live English preview while typing |
 | `model` | empty | model for the model engine, `provider/id` or an id; empty picks a Haiku model, else the session's model |
 | `openaiBaseUrl` · `openaiModel` · `openaiApiKey` | | for the openai engine |

@@ -56,6 +56,7 @@ OpenRouter），或你自己的程序（Apple Translation、DeepL、Papago）。
 | `/translate` | 开启或关闭翻译 |
 | `/translate view <mode>` | 切换回答的显示方式 |
 | `/translate status` | 语言、引擎、视图和队列 |
+| `/translate:settings` | 修改下面的选项 |
 
 底部状态行会显示正在运行的内容，例如 `ko↔en · claude-haiku-4-5 · 2 queued`。
 
@@ -77,17 +78,18 @@ pi-trans 先看它自己的 `language` 选项，再看系统区域设置（`LC_A
 
 ## 选项
 
-写在 `~/.pi/agent/pi-trans.json` 中，然后执行 `/reload`：
+用 `/translate:settings` 修改，或写在 `~/.pi/agent/pi-trans.json` 中，然后执行 `/reload`：
 
 ```json
-{ "language": "ko", "view": "stacked" }
+{ "language": "ko", "defaultView": "stacked" }
 ```
 
 | 选项 | 默认值 | |
 | --- | --- | --- |
 | `language` | 空 | 你的语言；留空则跟随系统区域设置 |
 | `engine` | `model` | `model` · `openai` · `command` |
-| `view` | `auto` | 见上方的视图 |
+| `defaultOn` | `true` | 启动 Pi 时开启翻译 |
+| `defaultView` | `auto` | 见上方的视图 |
 | `preview` | `true` | 输入时实时预览英文 |
 | `model` | 空 | model 引擎使用的模型，写 `provider/id` 或 id；留空则选一个 Haiku 模型，没有时用会话的模型 |
 | `openaiBaseUrl` · `openaiModel` · `openaiApiKey` | | 供 openai 引擎使用 |

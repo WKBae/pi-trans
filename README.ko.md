@@ -59,6 +59,7 @@ LM Studio, DeepSeek, OpenRouter)나 직접 만든 프로그램(Apple Translation
 | `/translate` | 번역 켜기/끄기 |
 | `/translate view <mode>` | 답변 보기 방식 바꾸기 |
 | `/translate status` | 언어, 엔진, 보기 방식, 대기열 |
+| `/translate:settings` | 아래 옵션 바꾸기 |
 
 푸터에 지금 돌아가는 것이 보입니다. 예: `ko↔en · claude-haiku-4-5 · 2 queued`.
 
@@ -80,17 +81,18 @@ pi-trans는 다음 순서로 언어를 정합니다: 자신의 `language` 옵션
 
 ## 옵션
 
-`~/.pi/agent/pi-trans.json`에 적고 `/reload` 하세요:
+`/translate:settings`에서 바꾸거나, `~/.pi/agent/pi-trans.json`에 적고 `/reload` 하세요:
 
 ```json
-{ "language": "ko", "view": "stacked" }
+{ "language": "ko", "defaultView": "stacked" }
 ```
 
 | 옵션 | 기본값 | |
 | --- | --- | --- |
 | `language` | 비어 있음 | 내 언어. 비워 두면 시스템 로케일을 따름 |
 | `engine` | `model` | `model` · `openai` · `command` |
-| `view` | `auto` | 위의 보기 방식 참고 |
+| `defaultOn` | `true` | Pi를 시작할 때 번역을 켬 |
+| `defaultView` | `auto` | 위의 보기 방식 참고 |
 | `preview` | `true` | 입력 중 영어 미리보기 |
 | `model` | 비어 있음 | model 엔진이 쓰는 모델. `provider/id` 또는 id. 비워 두면 Haiku 모델, 없으면 세션의 모델 |
 | `openaiBaseUrl` · `openaiModel` · `openaiApiKey` | | openai 엔진용 |

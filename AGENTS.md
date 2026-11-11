@@ -62,7 +62,7 @@ Pi's loader both need it.
 | `hooks/register.tsx`, everything else | `src/index.ts` | see the API map and Pi deltas below |
 | `hooks/hooks.json` | `package.json` `pi.extensions` | |
 | `types/index.d.ts` | `src/types.ts` | also holds `VIEWS` (from `hooks/register.tsx`); adds `Saved` (session entries) |
-| `.claude-plugin/plugin.json` `userConfig` | `readConfig()` in `src/index.ts`, options file `~/.pi/agent/pi-trans.json` | `haikuModel` is `model` (`provider/id` or id, default empty); `engine` default `model`; the resolved language is kept outside `Config`, the option as `languageOption` |
+| `.claude-plugin/plugin.json` `userConfig` | `readConfig()` in `src/index.ts`, options file `~/.pi/agent/pi-trans.json` | `haikuModel` is `model` (`provider/id` or id, default empty); `engine` default `model`; `view` is `defaultView` (a `view` key is still read); adds `defaultOn`; the resolved language is kept outside `Config`, the option as `languageOption`. `src/settings.ts` reads and writes the file and draws `/translate:settings` |
 | `tsconfig.json` (extends the Claude Code types) | `tsconfig.json` | standalone; `allowImportingTsExtensions` |
 | `tests/markdown.test.ts` | `tests/markdown.test.ts` | imports `./expect.ts` and `../src/*.ts` |
 | `tests/mod.test.tsx` | `tests/units.test.ts` (engines, helpers, language), `tests/extension.test.ts` (whole extension against a stand-in Pi) | |

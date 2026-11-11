@@ -60,6 +60,7 @@ Papago）につなげます。
 | `/translate` | 翻訳のオン・オフ |
 | `/translate view <mode>` | 回答の表示方法を変える |
 | `/translate status` | 言語、エンジン、表示方法、キュー |
+| `/translate:settings` | 下のオプションを変更 |
 
 フッターに、いま動いているものが表示されます（例：`ko↔en · claude-haiku-4-5 · 2 queued`）。
 
@@ -81,17 +82,18 @@ pi-trans は次の順に言語を決めます：自身の `language` オプシ�
 
 ## オプション
 
-`~/.pi/agent/pi-trans.json` に書いて、`/reload` します：
+`/translate:settings` で変更するか、`~/.pi/agent/pi-trans.json` に書いて `/reload` します：
 
 ```json
-{ "language": "ko", "view": "stacked" }
+{ "language": "ko", "defaultView": "stacked" }
 ```
 
 | オプション | 既定値 | |
 | --- | --- | --- |
 | `language` | 空 | あなたの言語。空ならシステムのロケールに従う |
 | `engine` | `model` | `model` · `openai` · `command` |
-| `view` | `auto` | 上の表示方法を参照 |
+| `defaultOn` | `true` | Pi の起動時に翻訳をオンにする |
+| `defaultView` | `auto` | 上の表示方法を参照 |
 | `preview` | `true` | 入力中の英語プレビュー |
 | `model` | 空 | model エンジンのモデル。`provider/id` または id。空なら Haiku モデル、なければセッションのモデル |
 | `openaiBaseUrl` · `openaiModel` · `openaiApiKey` | | openai エンジン用 |

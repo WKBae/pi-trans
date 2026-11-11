@@ -137,7 +137,7 @@ breaks, ANSI color codes kept).
 Translations are keyed by an FNV-1a hash of the text block (`keyOf`). Blocks already in the person's
 language are drawn untouched.
 
-`view` option (also `/translate view <mode>`):
+`defaultView` option (also `/translate view <mode>`):
 
 | Mode | What is drawn | Code blocks |
 | --- | --- | --- |
@@ -183,17 +183,23 @@ The extension's own words (command results, status, pending and failure notes) a
 interface, whatever the person's language: only translations are in their language.
 
 - Footer status (`ctx.ui.setStatus`): `ko↔en · claude-haiku-4-5` (and `· 3 queued` while there is work).
-- `/translate` toggles on and off; `/translate on|off|status|view <mode>`, with completions.
+- `/translate` toggles on and off; `/translate on|off|status|view <mode>`, with completions. Both last
+  until Pi restarts or `/reload`.
+- `/translate:settings` opens a `SettingsList` panel (`src/settings.ts`) over the options file: toggles
+  cycle on Enter, choices and text open a submenu, the model choice lists
+  `ctx.modelRegistry.getAvailable()` with type-to-search. Each change is written at once (other keys
+  kept, empty text removes the key) and applied to the running config; `language` applies next session.
 
 ## 4. Configuration (`~/.pi/agent/pi-trans.json`)
 
-Read at `session_start`, so `/reload` applies a change.
+Read at `session_start`, so `/reload` applies a change made by hand. `/translate:settings` writes it.
 
 | Field | Default | Notes |
 | --- | --- | --- |
 | `language` | empty | the person's language; empty follows `LC_ALL`/`LC_MESSAGES`/`LANG`; nothing set means English, nothing translated |
 | `engine` | `model` | `model` · `openai` · `command` |
-| `view` | `auto` | `auto` · `stacked` · `side` · `interleave` · `below` · `translated` · `original` |
+| `defaultOn` | `true` | translation on at the first session of a Pi process |
+| `defaultView` | `auto` | `auto` · `stacked` · `side` · `interleave` · `below` · `translated` · `original`; an older `view` key is read when it is missing |
 | `preview` | `true` | live preview line |
 | `model` | empty | model for the model engine and fallback, `provider/id` or an id |
 | `openaiBaseUrl`, `openaiModel`, `openaiApiKey` | empty | OpenAI-compatible endpoint |
