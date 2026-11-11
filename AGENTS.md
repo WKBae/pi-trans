@@ -26,7 +26,7 @@ itself (its repository, remote and files).
    `hooks/`, `.claude-plugin/` and `types/`. Port each change by hand, commit by commit or as one
    change, using the file map below.
 3. Classify every upstream commit before porting it:
-   - **Pure logic** (`hooks/markdown.ts`, `hooks/detect.ts`): apply as is (see below).
+      - **Pure logic** (`hooks/markdown.ts`, `hooks/detect.ts`): apply as is (see below), keeping the `src/markdown.ts` delta in the file map.
    - **Shared logic with Pi changes** (`hooks/engines.ts`, `hooks/language.ts`, `hooks/strings.ts`,
      the pure helpers in `hooks/register.tsx`): port the change, keep the Pi deltas listed below.
    - **Host behavior** (events, rendering, commands, options in `hooks/register.tsx`,
@@ -39,7 +39,7 @@ itself (its repository, remote and files).
    ported upstream commit.
 5. Report which upstream commits were ported, adapted, or skipped and why.
 
-For the two identical files a patch applies directly:
+For these two files a patch applies directly (a hunk that touches the path pattern needs the delta kept by hand):
 
 ```
 git diff f9f0fa7 upstream/main -- hooks/markdown.ts hooks/detect.ts | git apply -p2 --directory=src
@@ -52,7 +52,7 @@ Pi's loader both need it.
 
 | Upstream | Here | Differences to keep |
 | --- | --- | --- |
-| `hooks/markdown.ts` | `src/markdown.ts` | none |
+| `hooks/markdown.ts` | `src/markdown.ts` | the home or relative path pattern (`~/…`, `./…`) repeats `[\w.@+-]+(?:\/[\w.@+-]+)*\/?` instead of upstream's `(?:[\w.@+-]+\/?)*`, which backtracks exponentially when such a path is followed by a backtick; same matches |
 | `hooks/detect.ts` | `src/detect.ts` | none |
 | `hooks/language.ts` | `src/language.ts` | `pickLanguage(option, locales)`: no Claude Code `language` setting, so no `setting` argument and no `'setting'` source |
 | `hooks/strings.ts` | `src/strings.ts` | no `languageSetting` / `from_setting`; adds `missingModel`; header says Pi |
