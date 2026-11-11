@@ -2,13 +2,14 @@
 // in the same order; placeholders are restored and checked here, so an engine
 // that loses or alters one only costs that unit.
 
-import { restoreUnit, type Unit } from './markdown'
+import { restoreUnit, type Unit } from './markdown.ts'
 
-export type EngineKind = 'haiku' | 'openai' | 'command'
+export type EngineKind = 'model' | 'openai' | 'command'
 
 export type EngineConfig = {
   kind: EngineKind
-  haikuModel: string
+  /** A Pi model, `provider/id` or a bare id; empty picks one. */
+  model: string
   openaiBaseUrl: string
   openaiModel: string
   openaiApiKey: string
@@ -16,7 +17,7 @@ export type EngineConfig = {
   fallback: boolean
 }
 
-/** What the engines need from the host; register.tsx adapts `$` to it. */
+/** What the engines need from the host; index.ts adapts Pi to it. */
 export type Io = {
   complete(req: { model: string; system: string; prompt: string; maxTokens: number; timeoutMs: number }): Promise<
     { ok: true; text: string } | { ok: false; reason: string }
@@ -28,7 +29,7 @@ export type Io = {
 export type Translated = {
   /** Restored translations, null for a unit that failed. */
   out: (string | null)[]
-  /** The engine that produced the last batch (`haiku` after a fallback). */
+  /** The engine that produced the last batch (`model` after a fallback). */
   engine: string
   /** Why something failed, when anything did. */
   error?: string
@@ -103,22 +104,38 @@ type Raw = (texts: string[]) => Promise<string[]>
 
 class EngineError extends Error {}
 
-function haikuRaw(io: Io, cfg: EngineConfig, from: string, to: string): Raw {
+function modelRaw(io: Io, cfg: EngineConfig, from: string, to: string): Raw {
   const system = systemPrompt(from, to)
   return async texts => {
     const prompt = JSON.stringify(texts)
     const r = await io.complete({
-      model: cfg.haikuModel || 'haiku',
+      model: cfg.model,
       system,
       prompt,
       maxTokens: Math.min(16_000, 512 + prompt.length * 2),
       timeoutMs: TIMEOUT_MS,
     })
-    if (!r.ok) throw new EngineError(`haiku: ${r.reason}`)
+    if (!r.ok) throw new EngineError(`model: ${r.reason}`)
     const arr = parseArray(r.text)
-    if (!arr) throw new EngineError('haiku: reply was not a JSON array')
+    if (!arr) throw new EngineError('model: reply was not a JSON array')
     return arr
   }
+}
+
+/** Whether a text is written in English, asked of the model engine; undefined when it gives no answer. */
+export async function isEnglish(io: Io, cfg: EngineConfig, text: string): Promise<boolean | undefined> {
+  const r = await io.complete({
+    model: cfg.model,
+    system: 'Classify the language of the text. Reply with exactly one word: "english" if it is written in English, otherwise "other".',
+    prompt: text.slice(0, 2000),
+    maxTokens: 16,
+    timeoutMs: TIMEOUT_MS,
+  })
+  if (!r.ok) return undefined
+  const word = r.text.trim().toLowerCase()
+  if (word.startsWith('english')) return true
+  if (word.startsWith('other')) return false
+  return undefined
 }
 
 function openaiRaw(io: Io, cfg: EngineConfig, from: string, to: string): Raw {
@@ -202,7 +219,7 @@ function commandRaw(io: Io, cfg: EngineConfig, from: string, to: string): Raw {
 function rawFor(kind: EngineKind, io: Io, cfg: EngineConfig, from: string, to: string): Raw {
   if (kind === 'openai') return openaiRaw(io, cfg, from, to)
   if (kind === 'command') return commandRaw(io, cfg, from, to)
-  return haikuRaw(io, cfg, from, to)
+  return modelRaw(io, cfg, from, to)
 }
 
 /** Runs a batch; a reply of the wrong length is retried once as two halves. */
@@ -215,7 +232,7 @@ async function runBatch(raw: Raw, texts: string[], depth = 0): Promise<(string |
   return [...a, ...b]
 }
 
-/** Translates units from `from` to `to`, falling back to haiku when allowed. */
+/** Translates units from `from` to `to`, falling back to the model engine when allowed. */
 export async function translateUnits(io: Io, cfg: EngineConfig, units: Unit[], from: string, to: string): Promise<Translated> {
   const out: (string | null)[] = units.map(() => null)
   const texts = units.map(u => u.text)
@@ -229,12 +246,12 @@ export async function translateUnits(io: Io, cfg: EngineConfig, units: Unit[], f
       got = await runBatch(rawFor(cfg.kind, io, cfg, from, to), slice)
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
-      if (cfg.kind !== 'haiku' && cfg.fallback) {
+      if (cfg.kind !== 'model' && cfg.fallback) {
         try {
-          got = await runBatch(rawFor('haiku', io, cfg, from, to), slice)
-          engine = 'haiku'
+          got = await runBatch(rawFor('model', io, cfg, from, to), slice)
+          engine = 'model'
         } catch (e2) {
-          error += `; haiku: ${e2 instanceof Error ? e2.message : String(e2)}`
+          error += `; ${e2 instanceof Error ? e2.message : String(e2)}`
         }
       }
     }

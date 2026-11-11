@@ -1,5 +1,7 @@
 export type View = 'auto' | 'stacked' | 'interleave' | 'side' | 'below' | 'translated' | 'original'
 
+export const VIEWS: readonly View[] = ['auto', 'stacked', 'interleave', 'side', 'below', 'translated', 'original']
+
 /** One reply block's translation, keyed by a hash of the block's text. */
 export type ReplyEntry = {
   status: 'pending' | 'done' | 'failed' | 'skipped'
@@ -15,15 +17,7 @@ export type PromptEntry = { native: string; engine: string }
 /** The live preview of the draft. */
 export type Preview = { draft: string; english: string | null; status: 'pending' | 'done' | 'failed'; engine: string }
 
-declare module 'claude-code' {
-  interface PluginState {
-    'cc-trans': {
-      enabled: boolean
-      view: View | null
-      reply: StateFamily<ReplyEntry | null>
-      prompt: StateFamily<PromptEntry | null>
-      preview: Preview | null
-      queued: number
-    }
-  }
-}
+/** What the extension keeps in the session file, so a resumed session shows its translations again. */
+export type Saved =
+  | { kind: 'reply'; key: string; out: (string | null)[]; engine: string }
+  | { kind: 'prompt'; key: string; native: string; engine: string }

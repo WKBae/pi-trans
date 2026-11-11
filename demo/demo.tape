@@ -1,12 +1,12 @@
-# cc-trans demo. Run from the repository root:
+# pi-trans demo. Run from the repository root:
 #
 #   vhs demo/demo.tape && demo/render.sh
 #
 # Records a taller terminal than the clip; render.sh crops the top band
-# (logo, /clear, startup notices) away, shortens the still stretches while
+# (Pi's startup header) away, shortens the still stretches while
 # nothing changes, and makes the mp4 and the GIF.
-# The app is copied to /tmp/cc-trans-demo so no home path shows on screen;
-# trust that folder once in Claude Code before recording.
+# The app is copied to /tmp/pi-trans-demo so no home path shows on screen.
+# The language comes from LANG; only this extension is loaded.
 # The waits are generous on purpose: render.sh cuts what is left over.
 
 Output demo/out/raw.mp4
@@ -20,15 +20,11 @@ Set TypingSpeed 55ms
 Set CursorBlink false
 
 Hide
-# A clean environment when recorded from inside another Claude Code session.
-Type "D=$PWD/demo && rm -rf /tmp/cc-trans-demo && cp -R demo/app /tmp/cc-trans-demo && cd /tmp/cc-trans-demo && unset CLAUDECODE CLAUDE_CODE_CHILD_SESSION CLAUDE_CODE_SESSION_ID CLAUDE_CODE_BRIDGE_SESSION_ID CLAUDE_CODE_MESSAGING_SOCKET CLAUDE_CODE_MESSAGING_TOKEN CLAUDE_PID CLAUDE_CODE_SESSION_ATTENDED CLAUDE_CODE_ENTRYPOINT CLAUDE_EFFORT && clear"
+Type "D=$PWD/demo && rm -rf /tmp/pi-trans-demo && cp -R demo/app /tmp/pi-trans-demo && cd /tmp/pi-trans-demo && clear"
 Enter
-Type "claude --plugin-dir $D/.. --settings $D/settings.json --model sonnet --permission-mode acceptEdits"
+Type "LANG=ko_KR.UTF-8 pi --no-extensions -e $D/.. --no-session"
 Enter
 Sleep 8s
-Type "/clear"
-Enter
-Sleep 3s
 Show
 
 # 1. Ask in Korean; the English shows above the prompt while typing.

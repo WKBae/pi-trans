@@ -41,14 +41,12 @@ export function toLanguageCode(value: string | undefined | null): string | undef
 }
 
 /**
- * The person's language: the mod's own option, else Claude Code's `language`
- * setting, else the system locale, else English (nothing to translate).
+ * The person's language: the extension's own option, else the system locale,
+ * else English (nothing to translate).
  */
-export function pickLanguage(option: string, setting: unknown, locales: (string | undefined)[]): { code: string; from: 'option' | 'setting' | 'locale' | 'none' } {
+export function pickLanguage(option: string, locales: (string | undefined)[]): { code: string; from: 'option' | 'locale' | 'none' } {
   const fromOption = toLanguageCode(option)
   if (fromOption) return { code: fromOption, from: 'option' }
-  const fromSetting = typeof setting === 'string' ? toLanguageCode(setting) : undefined
-  if (fromSetting) return { code: fromSetting, from: 'setting' }
   for (const l of locales) {
     const code = toLanguageCode(l)
     if (code) return { code, from: 'locale' }

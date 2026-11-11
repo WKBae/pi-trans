@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Turns demo/out/raw.mp4 (from demo/demo.tape) into:
-#   demo/out/cc-trans.mp4  1280x720 H.264, for posting
-#   demo/cc-trans.gif      960 wide, for the README
+#   demo/out/pi-trans.mp4  1280x720 H.264, for posting
+#   demo/pi-trans.gif      960 wide, for the README
 #
 # Every stretch where the picture does not change is cut to HOLD seconds (the
-# tape waits generously for Claude and the translator); the last one is kept
+# tape waits generously for the agent and the translator); the last one is kept
 # for END_HOLD seconds.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-TOP=${TOP:-255}           # rows above the first prompt: logo, /clear, startup notices
+TOP=${TOP:-255}           # pixel rows above the first prompt: Pi's startup header
 HOLD=${HOLD:-3}         # seconds a still stretch is kept
 END_HOLD=${END_HOLD:-4}   # seconds the final frame is kept
 CROP="crop=1280:720:0:${TOP}"
@@ -35,13 +35,13 @@ print("+".join(f"between(t,{a:.3f},{b:.3f})" for a, b in cuts) or "0")
 SELECT="select='not(${CUT})',setpts=N/FRAME_RATE/TB"
 
 ffmpeg -y -loglevel error -i out/raw.mp4 -vf "$CROP,$SELECT" -an \
-  -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart out/cc-trans.mp4
+  -c:v libx264 -preset slow -crf 18 -pix_fmt yuv420p -movflags +faststart out/pi-trans.mp4
 
-ffmpeg -y -loglevel error -i out/cc-trans.mp4 \
+ffmpeg -y -loglevel error -i out/pi-trans.mp4 \
   -vf "fps=12,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle" \
-  out/cc-trans.raw.gif
-gifsicle -O3 --lossy=30 out/cc-trans.raw.gif -o cc-trans.gif
-rm out/cc-trans.raw.gif
+  out/pi-trans.raw.gif
+gifsicle -O3 --lossy=30 out/pi-trans.raw.gif -o pi-trans.gif
+rm out/pi-trans.raw.gif
 
-printf 'raw %.1fs -> %.1fs\n' "$DUR" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 out/cc-trans.mp4)"
-ls -lh out/cc-trans.mp4 cc-trans.gif
+printf 'raw %.1fs -> %.1fs\n' "$DUR" "$(ffprobe -v error -show_entries format=duration -of csv=p=0 out/pi-trans.mp4)"
+ls -lh out/pi-trans.mp4 pi-trans.gif
