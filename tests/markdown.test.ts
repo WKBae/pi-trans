@@ -167,3 +167,11 @@ test('a sentence period after Hangul is not masked; dotted members are one span'
   expect(u?.text).toBe('⟦0⟧과 ⟦1⟧ 차이를 알려줘. 코드와 파일은 빼고')
   expect(maskText('see ./src and ~/x, then . and .. alone')?.spans).toEqual(['./src', '~/x'])
 })
+
+test('a long home path right before a backtick masks in linear time', () => {
+  const path = '~/.worktrees/pi-claude-bridge/feat-forward-pi-system-prompt-and-more'
+  const started = performance.now()
+  expect(maskText(`작업용 worktree(\`${path}\`)가 아직 남아 있습니다.`)?.spans).toEqual([`\`${path}\``])
+  expect(maskText(`keep ${path}/ and ./a/b:3, then`)?.spans).toEqual([`${path}/`, './a/b:3'])
+  expect(50).toBeGreaterThan(performance.now() - started)
+})
