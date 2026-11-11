@@ -1,0 +1,6 @@
+.github/
+demo/
+tests/
+AGENTS.md
+DESIGN.md
+tsconfig.json
